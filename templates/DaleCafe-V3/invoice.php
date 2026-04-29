@@ -17,11 +17,12 @@
 
 defined( 'ABSPATH' ) || exit;
 
-if ( ! isset( $this ) || ! $this instanceof WPO\WC\PDF_Invoices\Documents\Order_Document ) {
+if ( ! isset( $this ) || ! is_object( $this ) ) {
     return;
 }
 
-$order = $this->order;
+$document_type = isset( $this->type ) ? $this->type : ( method_exists( $this, 'get_type' ) ? $this->get_type() : 'invoice' );
+$order         = isset( $this->order ) ? $this->order : null;
 if ( ! $order instanceof WC_Abstract_Order ) {
     return;
 }
@@ -58,11 +59,11 @@ $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_
 <html <?php language_attributes(); ?>>
 <head>
     <meta charset="UTF-8">
-    <?php do_action( 'wpo_wcpdf_' . $this->get_type() . '_head', $this->get_type(), $order ); ?>
+    <?php do_action( 'wpo_wcpdf_' . $document_type . '_head', $document_type, $order ); ?>
 </head>
-<body class="<?php echo esc_attr( $this->get_type() ); ?> <?php echo $fel_es_contingencia ? 'contingencia' : 'principal'; ?>">
+<body class="<?php echo esc_attr( $document_type ); ?> <?php echo esc_attr( $fel_es_contingencia ? 'contingencia' : 'principal' ); ?>">
 
-<?php do_action( 'wpo_wcpdf_before_document', $this->get_type(), $order ); ?>
+<?php do_action( 'wpo_wcpdf_before_document', $document_type, $order ); ?>
 
 <!-- =====================================================================
      CABECERA
@@ -71,11 +72,10 @@ $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_
     <table class="header-table">
         <tr>
             <td class="logo-cell">
-                <?php if ( $this->get_header_logo_id() ) : ?>
-                    <img src="<?php echo esc_url( wp_get_attachment_url( $this->get_header_logo_id() ) ); ?>"
-                         alt="DaleCafe" class="logo">
+                <?php if ( method_exists( $this, 'has_header_logo' ) && $this->has_header_logo() ) : ?>
+                    <?php $this->header_logo(); ?>
                 <?php else : ?>
-                    <h1 class="shop-name">DaleCafe</h1>
+                    <h1 class="shop-name"><?php echo esc_html( method_exists( $this, 'get_title' ) ? $this->get_title() : 'DaleCafe' ); ?></h1>
                 <?php endif; ?>
             </td>
             <td class="invoice-title-cell">
@@ -114,12 +114,12 @@ $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_
         <tr>
             <!-- Datos del establecimiento -->
             <td class="shop-info">
-                <?php do_action( 'wpo_wcpdf_before_shop_name', $this->get_type(), $order ); ?>
+                <?php do_action( 'wpo_wcpdf_before_shop_name', $document_type, $order ); ?>
                 <strong class="shop-name"><?php $this->shop_name(); ?></strong>
-                <?php do_action( 'wpo_wcpdf_after_shop_name', $this->get_type(), $order ); ?>
-                <?php do_action( 'wpo_wcpdf_before_shop_address', $this->get_type(), $order ); ?>
+                <?php do_action( 'wpo_wcpdf_after_shop_name', $document_type, $order ); ?>
+                <?php do_action( 'wpo_wcpdf_before_shop_address', $document_type, $order ); ?>
                 <div class="shop-address"><?php $this->shop_address(); ?></div>
-                <?php do_action( 'wpo_wcpdf_after_shop_address', $this->get_type(), $order ); ?>
+                <?php do_action( 'wpo_wcpdf_after_shop_address', $document_type, $order ); ?>
                 <?php if ( $fel_nit_empresa ) : ?>
                     <div class="shop-nit">
                         <strong><?php esc_html_e( 'NIT:', 'dale-facturas' ); ?></strong>
@@ -131,7 +131,7 @@ $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_
             <!-- Datos del pedido -->
             <td class="order-data">
                 <table class="order-data-table">
-                    <?php do_action( 'wpo_wcpdf_before_order_data', $this->get_type(), $order ); ?>
+                    <?php do_action( 'wpo_wcpdf_before_order_data', $document_type, $order ); ?>
                     <tr>
                         <th><?php esc_html_e( 'Pedido:', 'dale-facturas' ); ?></th>
                         <td><?php echo esc_html( $order_number ); ?></td>
@@ -146,7 +146,7 @@ $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_
                             <td><?php echo esc_html( $fel_fecha_cert ); ?></td>
                         </tr>
                     <?php endif; ?>
-                    <?php do_action( 'wpo_wcpdf_after_order_data', $this->get_type(), $order ); ?>
+                    <?php do_action( 'wpo_wcpdf_after_order_data', $document_type, $order ); ?>
                 </table>
             </td>
         </tr>
@@ -157,7 +157,7 @@ $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_
         <table class="billing-table">
             <tr>
                 <td>
-                    <?php do_action( 'wpo_wcpdf_before_billing_address', $this->get_type(), $order ); ?>
+                    <?php do_action( 'wpo_wcpdf_before_billing_address', $document_type, $order ); ?>
                     <strong><?php esc_html_e( 'Facturar a:', 'dale-facturas' ); ?></strong><br>
                     <strong><?php esc_html_e( 'NIT:', 'dale-facturas' ); ?></strong>
                     <?php echo esc_html( $billing_nit ); ?>
@@ -167,7 +167,7 @@ $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_
                     <br>
                     <?php echo esc_html( $billing_name ); ?><br>
                     <?php echo esc_html( $billing_address ); ?>
-                    <?php do_action( 'wpo_wcpdf_after_billing_address', $this->get_type(), $order ); ?>
+                    <?php do_action( 'wpo_wcpdf_after_billing_address', $document_type, $order ); ?>
                 </td>
                 <td>
                     <?php if ( $billing_email ) : ?>
@@ -188,7 +188,7 @@ $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_
     <!-- ===================================================================
          TABLA DE PRODUCTOS
     ==================================================================== -->
-    <?php do_action( 'wpo_wcpdf_before_order_details', $this->get_type(), $order ); ?>
+    <?php do_action( 'wpo_wcpdf_before_order_details', $document_type, $order ); ?>
     <table class="order-details">
         <thead>
             <tr>
@@ -200,12 +200,12 @@ $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_
         </thead>
         <tbody>
             <?php foreach ( $this->get_order_items() as $item_id => $item ) : ?>
-                <tr class="<?php echo apply_filters( 'wpo_wcpdf_item_row_class', '', $this->get_type(), $order, $item_id ); ?>">
+                <tr class="<?php echo esc_attr( apply_filters( 'wpo_wcpdf_item_row_class', $item_id, $document_type, $order, $item_id ) ); ?>">
                     <td class="col-product">
                         <?php echo wp_kses_post( $item['name'] ); ?>
-                        <?php do_action( 'wpo_wcpdf_before_item_meta', $this->get_type(), $item, $order ); ?>
+                        <?php do_action( 'wpo_wcpdf_before_item_meta', $document_type, $item, $order ); ?>
                         <?php $this->item_meta( $item ); ?>
-                        <?php do_action( 'wpo_wcpdf_after_item_meta', $this->get_type(), $item, $order ); ?>
+                        <?php do_action( 'wpo_wcpdf_after_item_meta', $document_type, $item, $order ); ?>
                     </td>
                     <td class="col-qty"><?php echo esc_html( $item['quantity'] ); ?></td>
                     <td class="col-price"><?php $this->single_item_price( $item ); ?></td>
@@ -222,7 +222,7 @@ $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_
             <?php endforeach; ?>
         </tfoot>
     </table>
-    <?php do_action( 'wpo_wcpdf_after_order_details', $this->get_type(), $order ); ?>
+    <?php do_action( 'wpo_wcpdf_after_order_details', $document_type, $order ); ?>
 
     <!-- ===================================================================
          DATOS FEL (Certificación electrónica)
@@ -298,12 +298,12 @@ $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_
      PIE DE PÁGINA
 ====================================================================== -->
 <div id="invoice-footer">
-    <?php do_action( 'wpo_wcpdf_before_footer', $this->get_type(), $order ); ?>
+    <?php do_action( 'wpo_wcpdf_before_footer', $document_type, $order ); ?>
     <div class="footer-text"><?php $this->footer(); ?></div>
-    <?php do_action( 'wpo_wcpdf_after_footer', $this->get_type(), $order ); ?>
+    <?php do_action( 'wpo_wcpdf_after_footer', $document_type, $order ); ?>
 </div>
 
-<?php do_action( 'wpo_wcpdf_after_document', $this->get_type(), $order ); ?>
+<?php do_action( 'wpo_wcpdf_after_document', $document_type, $order ); ?>
 
 </body>
 </html>
