@@ -151,16 +151,7 @@ $establecimiento_info = array_filter( array(
 <!-- =====================================================================
      CABECERA
 ====================================================================== -->
-<div id="invoice-header">
-    <table class="header-table">
-        <tr>
-            <td class="logo-cell">
-                <img src="<?php echo esc_url( $header_fallback_logo ); ?>" alt="DaleCafe" class="header-fallback-logo" />
-            </td>
-            <td class="invoice-title-cell"></td>
-        </tr>
-    </table>
-</div>
+<div id="invoice-header" style="background-image: url('<?php echo esc_url( $header_fallback_logo ); ?>');"></div>
 
 <div class="panel-box dte-box">
     <div class="panel-title"><?php esc_html_e( 'DOCUMENTO TRIBUTARIO ELECTRONICO', 'dale-facturas' ); ?></div>

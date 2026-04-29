@@ -9,6 +9,11 @@ defined( 'ABSPATH' ) || exit;
 class DFC_Macrobase_API {
 
     /**
+     * Source name for WooCommerce logs.
+     */
+    private const LOG_SOURCE = 'dale-facturas';
+
+    /**
      * URL del API de Macrobase.
      */
     private string $api_url;
@@ -186,17 +191,32 @@ class DFC_Macrobase_API {
      * @param mixed  $data   Datos a loguear.
      */
     private function log_debug( string $type, $data ): void {
-        if ( ! defined( 'WP_DEBUG_LOG' ) || ! WP_DEBUG_LOG ) {
+        if ( ! get_option( DFC_Settings::OPTION_DEBUG_MODE ) ) {
             return;
         }
 
+        if ( ! function_exists( 'wc_get_logger' ) ) {
+            return;
+        }
+
+        $logger  = wc_get_logger();
+        $context = [ 'source' => self::LOG_SOURCE ];
         $message = sprintf(
-            "[DaleCafe Facturas - %s] %s\n",
+            '[%s] %s',
             $type,
             wp_json_encode( $data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE )
         );
 
-        error_log( $message );
+        switch ( strtoupper( $type ) ) {
+            case 'ERROR':
+                $logger->error( $message, $context );
+                break;
+            case 'REQUEST':
+            case 'RESPONSE':
+            default:
+                $logger->debug( $message, $context );
+                break;
+        }
     }
 
     /**
