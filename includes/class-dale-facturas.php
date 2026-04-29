@@ -41,10 +41,10 @@ class Dale_Facturas {
     private function load_dependencies(): void {
         require_once DFC_PLUGIN_DIR . 'includes/class-settings.php';
         require_once DFC_PLUGIN_DIR . 'includes/class-macrobase-api.php';
+        require_once DFC_PLUGIN_DIR . 'includes/class-product-mapper.php';
+        require_once DFC_PLUGIN_DIR . 'includes/class-nit-handler.php';
 
         // Las siguientes clases se cargarán en fases posteriores:
-        // require_once DFC_PLUGIN_DIR . 'includes/class-product-mapper.php';
-        // require_once DFC_PLUGIN_DIR . 'includes/class-nit-handler.php';
         // require_once DFC_PLUGIN_DIR . 'includes/class-invoice-generator.php';
         // require_once DFC_PLUGIN_DIR . 'includes/class-order-duplicator.php';
         // require_once DFC_PLUGIN_DIR . 'includes/class-admin.php';
