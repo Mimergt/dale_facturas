@@ -143,15 +143,21 @@ class DFC_Invoice_Generator {
                 }
 
                 $quantity = $item->get_quantity();
-                $price    = (float) $item->get_subtotal();
-                $subtotal += $price;
+                $item_total = (float) $item->get_subtotal();
+                $price_unitario = $item_total / $quantity;
+                $subtotal += $item_total;
+
+                // Determinar pluPadre basado en el SKU o ID del producto
+                $plu_padre = $this->determine_plu_padre( $product, $item );
 
                 $items[] = [
-                    'plu'      => $plu,
-                    'nombre'   => $product->get_name(),
-                    'cantidad' => $quantity,
-                    'precio'   => $price / $quantity, // Precio unitario
-                    'subtotal' => $price,
+                    'plu'                      => $plu,
+                    'cantidad'                 => $quantity,
+                    'precio'                   => $price_unitario,
+                    'monto'                    => $item_total,
+                    'descuentoItemPorcentaje'  => 0,
+                    'comboNumero'              => 1,
+                    'pluPadre'                 => $plu_padre,
                 ];
             }
         }
@@ -164,59 +170,193 @@ class DFC_Invoice_Generator {
             );
         }
 
-        // 3. Obtener impuestos
+        // 3. Agregar envío como item especial (PLU 81)
+        $shipping_total = (float) $order->get_shipping_total();
+        if ( $shipping_total > 0 ) {
+            $items[] = [
+                'plu'                      => 81, // PLU especial para envío
+                'cantidad'                 => 1,
+                'precio'                   => $shipping_total,
+                'monto'                    => $shipping_total,
+                'descuentoItemPorcentaje'  => 0,
+                'comboNumero'              => 1,
+                'pluPadre'                 => 81,
+            ];
+            $subtotal += $shipping_total;
+        }
+
+        // 4. Obtener impuestos
         $tax_total = 0;
         foreach ( $order->get_items( 'tax' ) as $tax_item ) {
             $tax_total += (float) $tax_item->get_tax_total();
         }
 
-        // 4. Obtener cliente y NIT
+        // 5. Obtener cliente y NIT
         $nit = DFC_NIT_Handler::get_nit( $order );
         $cliente = [
-            'nombre'  => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
-            'nit'     => $nit,
-            'email'   => $order->get_billing_email(),
-            'telefono' => $order->get_billing_phone(),
-            'direccion' => $order->get_billing_address_1(),
+            'nombre'      => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
+            'nit'         => $nit,
+            'email'       => $order->get_billing_email(),
+            'telefono'    => $order->get_billing_phone(),
+            'direccion'   => $order->get_billing_address_1(),
+            'direccion2'  => $order->get_billing_address_2(),
+            'ciudad'      => $order->get_billing_city(),
+            'departamento' => $order->get_billing_state() ?? 'Guatemala',
         ];
 
-        // 5. Construir payload final
+        // 6. Construir formasPago basado en el método de pago
+        $formas_pago = $this->build_formas_pago( $order, (float) $order->get_total() );
+
+        // 7. Construir payload final (estructura compatible con api-facturas.php original)
         $payload = [
             'numeroOrden'  => $order->get_order_number(),
-            'cliente'      => $cliente,
-            'items'        => $items,
-            'subtotal'     => $subtotal,
-            'impuesto'     => $tax_total,
-            'total'        => (float) $order->get_total(),
-            'fecha'        => $order->get_date_created()->format( 'Y-m-d H:i:s' ),
-            'moneda'       => $order->get_currency(),
-            'formasPago'   => [ $this->get_payment_method( $order ) ],
+            'clienteNombre' => $cliente['nombre'],
+            'clienteTelefono' => $cliente['telefono'],
+            'clienteEmail' => $cliente['email'],
+            'clienteNIT'   => $nit,
+            'clienteDireccion2' => $cliente['direccion'] . ' ' . $cliente['direccion2'] . ' ' . $cliente['ciudad'],
+            'clienteCiudad' => $cliente['ciudad'] ?? 'CIUDAD',
+            'clienteDepartamen' => $cliente['departamento'],
+            'formasPago'   => $formas_pago,
+            'productos'    => $items,
         ];
 
         return $payload;
     }
 
     /**
-     * Obtener forma de pago del pedido formateada para Macrobase.
+     * Determinar el pluPadre para un item basado en producto_id y variation_id.
+     * Migrado desde la lógica original de api-facturas.php.
      *
-     * @param WC_Order $order Pedido.
+     * @param WC_Product $product Producto.
+     * @param WC_Order_Item_Product $item Item del pedido.
      *
-     * @return string Forma de pago.
+     * @return int PLU padre.
      */
-    private function get_payment_method( WC_Order $order ): string {
-        $method = $order->get_payment_method();
+    private function determine_plu_padre( WC_Product $product, WC_Order_Item_Product $item ): int {
+        $product_id = $product->get_id();
+        $sku = $product->get_sku();
+        $variation_id = $item->get_variation_id();
 
-        // Mapear métodos comunes a formatos de Macrobase
+        // Por defecto, pluPadre = SKU convertido a PLU
+        $plu_padre = $this->get_sku_as_plu( $sku );
+
+        // Si es producto variable (tiene variation_id), aplicar lógica especial según producto_id
+        if ( $variation_id !== 0 ) {
+            // Productos específicos que tienen pluPadre diferente
+            if ( in_array( $product_id, [ 245768, 247490 ], true ) ) {
+                $plu_padre = 1;
+            }
+        } else {
+            // Si es producto simple (sin variaciones), aplicar otra lógica según producto_id
+            if ( in_array( $product_id, [ 232202, 208780 ], true ) ) {
+                $plu_padre = 75; // SuperFamily
+            }
+        }
+
+        return $plu_padre;
+    }
+
+    /**
+     * Convertir un SKU a PLU usando la misma lógica que el mapeo.
+     * Retorna el PLU o el SKU como número si no encuentra mapeo.
+     *
+     * @param string $sku SKU del producto.
+     *
+     * @return int PLU o SKU como número.
+     */
+    private function get_sku_as_plu( string $sku ): int {
+        // Intentar mapear exactamente como en el original
+        $sku_lower = strtolower( $sku );
+
         $map = [
-            'stripe'        => 'Tarjeta de Crédito',
-            'paypal'        => 'PayPal',
-            'woocommerce_pay' => 'Tarjeta de Crédito',
-            'bacs'          => 'Transferencia Bancaria',
-            'cheque'        => 'Cheque',
-            'cod'           => 'Pago Contra Entrega',
+            'starter'     => 1,
+            'starter-1'   => 1,
+            'family'      => 2,
+            'superfamily' => 75,
+            '19-web'      => 19,
+            '18-web'      => 18,
+            '20-web'      => 20,
+            '35-web'      => 35,
+            '23-web'      => 23,
+            '25-web'      => 25,
+            '24-web'      => 24,
+            '58-web'      => 58,
+            '21-web'      => 21,
+            '22-web'      => 22,
+            '114-web'     => 114,
+            '115-web'     => 115,
         ];
 
-        return $map[ $method ] ?? $order->get_payment_method_title() ?? 'Otro';
+        return $map[ $sku_lower ] ?? (int) $sku;
+    }
+
+    /**
+     * Construir la estructura de formasPago basada en el método de pago.
+     * Migrado desde la lógica original de api-facturas.php.
+     *
+     * @param WC_Order $order Pedido.
+     * @param float    $total Monto total.
+     *
+     * @return array Array de formas de pago (media, emisor, codigo, monto).
+     */
+    private function build_formas_pago( WC_Order $order, float $total ): array {
+        $payment_method = $order->get_payment_method();
+
+        // Mapeo de métodos WooCommerce a estructura Macrobase
+        // media: 1=Efectivo, 4=Tarjeta Crédito, 9=Transferencia/Cheque
+        // emisor: 3=Emisor externo (p.ej. banco), 0=No aplica
+        // codigo: 0=default, 1=Transferencia, 2=Cheque/Link
+
+        $formas_pago = [];
+
+        switch ( $payment_method ) {
+            case 'mwc_gateway': // Débito automático (tarjeta)
+                $formas_pago[] = [
+                    'media'   => 4,
+                    'emisor'  => 3,
+                    'codigo'  => 0,
+                    'monto'   => $total,
+                ];
+                break;
+
+            case 'cod': // Pago contra entrega (efectivo)
+                $formas_pago[] = [
+                    'media'   => 1,
+                    'emisor'  => 0,
+                    'codigo'  => 0,
+                    'monto'   => $total,
+                ];
+                break;
+
+            case 'bacs': // Transferencia bancaria
+                $formas_pago[] = [
+                    'media'   => 9,
+                    'emisor'  => 0,
+                    'codigo'  => 1,
+                    'monto'   => $total,
+                ];
+                break;
+
+            case 'cheque': // Cheque o Link
+                $formas_pago[] = [
+                    'media'   => 9,
+                    'emisor'  => 0,
+                    'codigo'  => 2,
+                    'monto'   => $total,
+                ];
+                break;
+
+            default: // Default: Tarjeta crédito
+                $formas_pago[] = [
+                    'media'   => 4,
+                    'emisor'  => 3,
+                    'codigo'  => 0,
+                    'monto'   => $total,
+                ];
+        }
+
+        return $formas_pago;
     }
 
     /**
