@@ -42,6 +42,45 @@ $fel_establecimiento = $order->get_meta( '_dfc_fel_establecimiento_nombre' );
 $fel_resolucion_num = $order->get_meta( '_dfc_fel_resolucion_numero' );
 $fel_resolucion_fecha = $order->get_meta( '_dfc_fel_resolucion_fecha' );
 
+$api_response_meta = $order->get_meta( '_dfc_api_response' );
+$api_response      = is_string( $api_response_meta ) ? json_decode( $api_response_meta, true ) : array();
+$respuesta_completa = array();
+
+if ( is_array( $api_response ) ) {
+    $respuesta_completa = isset( $api_response['respuesta_completa'] ) && is_array( $api_response['respuesta_completa'] )
+        ? $api_response['respuesta_completa']
+        : $api_response;
+}
+
+if ( empty( $fel_serie ) && ! empty( $respuesta_completa['serie'] ) ) {
+    $fel_serie = $respuesta_completa['serie'];
+}
+if ( empty( $fel_transaccion ) && ! empty( $respuesta_completa['transaccion'] ) ) {
+    $fel_transaccion = $respuesta_completa['transaccion'];
+}
+if ( empty( $fel_firma ) && ! empty( $respuesta_completa['firmaElectronica'] ) ) {
+    $fel_firma = $respuesta_completa['firmaElectronica'];
+}
+if ( empty( $fel_nit_empresa ) && ! empty( $respuesta_completa['empresaNit'] ) ) {
+    $fel_nit_empresa = $respuesta_completa['empresaNit'];
+}
+if ( empty( $fel_nombre_empresa ) && ! empty( $respuesta_completa['empresaNombre'] ) ) {
+    $fel_nombre_empresa = $respuesta_completa['empresaNombre'];
+}
+if ( empty( $fel_establecimiento ) && ! empty( $respuesta_completa['establecimientoNombre'] ) ) {
+    $fel_establecimiento = $respuesta_completa['establecimientoNombre'];
+}
+
+$establecimiento_direccion = ! empty( $respuesta_completa['establecimientoDireccion'] )
+    ? $respuesta_completa['establecimientoDireccion']
+    : '';
+$certificador_nombre = ! empty( $respuesta_completa['gfaceEmpresa'] )
+    ? $respuesta_completa['gfaceEmpresa']
+    : $order->get_meta( '_dfc_fel_gface_empresa' );
+$certificador_nit = ! empty( $respuesta_completa['gfaceNit'] )
+    ? $respuesta_completa['gfaceNit']
+    : $order->get_meta( '_dfc_fel_gface_nit' );
+
 $fel_certificado = ! empty( $fel_serie ) && ! empty( $fel_transaccion );
 
 // Datos del cliente
@@ -87,8 +126,17 @@ if ( empty( $shop_address ) ) {
 
 $header_fallback_logo = 'https://dalecafe.com/wp-content/uploads/2019/08/Asset-2.png';
 
-$certificador_nombre = $order->get_meta( '_dfc_fel_gface_empresa' );
-$certificador_nit    = $order->get_meta( '_dfc_fel_gface_nit' );
+$factura_referencia  = ! empty( $respuesta_completa['serieInterna'] ) || ! empty( $respuesta_completa['transaccionInterna'] )
+    ? trim( ( $respuesta_completa['serieInterna'] ?? '' ) . ' ' . ( $respuesta_completa['transaccionInterna'] ?? '' ) )
+    : $order_number;
+$fecha_emision       = ! empty( $respuesta_completa['fechaEmision'] )
+    ? $respuesta_completa['fechaEmision']
+    : ( $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '' );
+$establecimiento_info = array_filter( array(
+    $fel_establecimiento ? $fel_establecimiento : $empresa_nombre,
+    $establecimiento_direccion ? __( 'Dirección:', 'dale-facturas' ) . ' ' . $establecimiento_direccion : __( 'Dirección:', 'dale-facturas' ) . ' ' . $shop_address,
+    __( 'NIT:', 'dale-facturas' ) . ' ' . $empresa_nit,
+) );
 ?>
 <!DOCTYPE html>
 <html <?php language_attributes(); ?>>
@@ -124,11 +172,11 @@ $certificador_nit    = $order->get_meta( '_dfc_fel_gface_nit' );
     </div>
     <div class="panel-line">
         <?php esc_html_e( 'Referencia:', 'dale-facturas' ); ?>
-        <strong><?php echo esc_html( $order_number ); ?></strong>
+        <strong><?php echo esc_html( $factura_referencia ); ?></strong>
     </div>
     <div class="panel-line">
         <?php esc_html_e( 'Fecha y hora de emisión:', 'dale-facturas' ); ?>
-        <strong><?php echo esc_html( $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '' ); ?></strong>
+        <strong><?php echo esc_html( $fecha_emision ); ?></strong>
     </div>
 </div>
 
@@ -207,7 +255,7 @@ $certificador_nit    = $order->get_meta( '_dfc_fel_gface_nit' );
         <div class="section-divider"></div>
 
         <p class="info-line est-line">
-            <span class="first-text"><?php echo esc_html( $empresa_nombre ); ?> | <?php esc_html_e( 'Dirección:', 'dale-facturas' ); ?> <?php echo esc_html( $shop_address ); ?> | <?php esc_html_e( 'NIT:', 'dale-facturas' ); ?> <?php echo esc_html( $empresa_nit ); ?></span>
+            <span class="first-text"><?php echo esc_html( implode( ' | ', $establecimiento_info ) ); ?></span>
         </p>
 
         <p class="info-line est-line"><span class="first-text"><?php esc_html_e( 'Autorización FEL:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $fel_firma ? $fel_firma : 'N/A' ); ?></span></p>
