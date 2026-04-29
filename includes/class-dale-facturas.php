@@ -43,9 +43,9 @@ class Dale_Facturas {
         require_once DFC_PLUGIN_DIR . 'includes/class-macrobase-api.php';
         require_once DFC_PLUGIN_DIR . 'includes/class-product-mapper.php';
         require_once DFC_PLUGIN_DIR . 'includes/class-nit-handler.php';
+        require_once DFC_PLUGIN_DIR . 'includes/class-invoice-generator.php';
 
         // Las siguientes clases se cargarán en fases posteriores:
-        // require_once DFC_PLUGIN_DIR . 'includes/class-invoice-generator.php';
         // require_once DFC_PLUGIN_DIR . 'includes/class-order-duplicator.php';
         // require_once DFC_PLUGIN_DIR . 'includes/class-admin.php';
 
@@ -58,6 +58,10 @@ class Dale_Facturas {
     private function register_hooks(): void {
         // Settings admin
         $this->settings->register_hooks();
+
+        // Invoice generator
+        $invoice_gen = new DFC_Invoice_Generator();
+        $invoice_gen->register_hooks();
 
         // Registrar el path del template WCPDF "DaleCafe-V3"
         add_filter( 'wpo_wcpdf_template_paths', [ $this, 'register_template_path' ] );
