@@ -2,6 +2,7 @@
 /**
  * Generador de facturas: integra todos los componentes para crear factura en Macrobase.
  * Se ejecuta cuando el pedido pasa a estado "Completado".
+ * Incluye lógica completa de api-facturas.php: pluPadre, formasPago, Micro Lotes, etc.
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -115,6 +116,7 @@ class DFC_Invoice_Generator {
 
     /**
      * Construir el payload de facturación para el API.
+     * Incluye lógica completa del api-facturas.php original.
      *
      * @param WC_Order $order Pedido.
      *
@@ -145,16 +147,26 @@ class DFC_Invoice_Generator {
                 $quantity = $item->get_quantity();
                 $item_total = (float) $item->get_subtotal();
                 $price_unitario = $item_total / $quantity;
-                $subtotal += $item_total;
 
-                // Determinar pluPadre basado en el SKU o ID del producto
-                $plu_padre = $this->determine_plu_padre( $product, $item );
+                // Determinar pluPadre e identificar flags como Micro Lotes (líneas 221-298 api-facturas.php)
+                $padre_flags = $this->determine_plu_padre_and_flags( $product, $item );
+                $plu_padre = $padre_flags['plu_padre'];
+                $is_micro_lote = $padre_flags['is_micro_lote'];
+
+                // Si es Micro Lote, ajustar el precio restando 25 (como en original api-facturas.php)
+                $item_total_adjusted = $item_total;
+                if ( $is_micro_lote ) {
+                    $item_total_adjusted = max( 0, $item_total - 25 );
+                    $price_unitario = $item_total_adjusted / $quantity;
+                }
+
+                $subtotal += $item_total_adjusted;
 
                 $items[] = [
                     'plu'                      => $plu,
                     'cantidad'                 => $quantity,
                     'precio'                   => $price_unitario,
-                    'monto'                    => $item_total,
+                    'monto'                    => $item_total_adjusted,
                     'descuentoItemPorcentaje'  => 0,
                     'comboNumero'              => 1,
                     'pluPadre'                 => $plu_padre,
@@ -225,36 +237,52 @@ class DFC_Invoice_Generator {
     }
 
     /**
-     * Determinar el pluPadre para un item basado en producto_id y variation_id.
-     * Migrado desde la lógica original de api-facturas.php.
+     * Determinar el pluPadre para un item e identificar flags especiales.
+     * Incluye lógica de "Paso 3" vs otros, y detección de "Micro Lotes" (líneas 221-298 api-facturas.php).
      *
      * @param WC_Product $product Producto.
      * @param WC_Order_Item_Product $item Item del pedido.
      *
-     * @return int PLU padre.
+     * @return array Array con 'plu_padre' e 'is_micro_lote'.
      */
-    private function determine_plu_padre( WC_Product $product, WC_Order_Item_Product $item ): int {
+    private function determine_plu_padre_and_flags( WC_Product $product, WC_Order_Item_Product $item ): array {
         $product_id = $product->get_id();
         $sku = $product->get_sku();
         $variation_id = $item->get_variation_id();
+        $is_micro_lote = false;
 
         // Por defecto, pluPadre = SKU convertido a PLU
         $plu_padre = $this->get_sku_as_plu( $sku );
 
+        // Detectar si es Micro Lote (para ajustar precio después)
+        // Busca en metadatos del item por la presencia de "Micro Lotes" (línea 221 del api-facturas.php)
+        $meta_data = $item->get_meta_data();
+        foreach ( $meta_data as $meta ) {
+            $meta_key   = strtolower( $meta->key );
+            $meta_value = strtolower( (string) $meta->value );
+            if ( strpos( $meta_key, 'micro' ) !== false || strpos( $meta_value, 'micro lote' ) !== false ) {
+                $is_micro_lote = true;
+                break;
+            }
+        }
+
         // Si es producto variable (tiene variation_id), aplicar lógica especial según producto_id
         if ( $variation_id !== 0 ) {
-            // Productos específicos que tienen pluPadre diferente
+            // Productos específicos que tienen pluPadre diferente (línea 256-259)
             if ( in_array( $product_id, [ 245768, 247490 ], true ) ) {
                 $plu_padre = 1;
             }
         } else {
-            // Si es producto simple (sin variaciones), aplicar otra lógica según producto_id
+            // Si es producto simple (sin variaciones), aplicar otra lógica según producto_id (línea 262-264)
             if ( in_array( $product_id, [ 232202, 208780 ], true ) ) {
                 $plu_padre = 75; // SuperFamily
             }
         }
 
-        return $plu_padre;
+        return [
+            'plu_padre'     => $plu_padre,
+            'is_micro_lote' => $is_micro_lote,
+        ];
     }
 
     /**
@@ -293,7 +321,7 @@ class DFC_Invoice_Generator {
 
     /**
      * Construir la estructura de formasPago basada en el método de pago.
-     * Migrado desde la lógica original de api-facturas.php.
+     * Incluye mapeo completo de métodos WooCommerce a estructura Macrobase.
      *
      * @param WC_Order $order Pedido.
      * @param float    $total Monto total.
@@ -303,7 +331,7 @@ class DFC_Invoice_Generator {
     private function build_formas_pago( WC_Order $order, float $total ): array {
         $payment_method = $order->get_payment_method();
 
-        // Mapeo de métodos WooCommerce a estructura Macrobase
+        // Mapeo de métodos WooCommerce a estructura Macrobase (líneas 309-349 api-facturas.php)
         // media: 1=Efectivo, 4=Tarjeta Crédito, 9=Transferencia/Cheque
         // emisor: 3=Emisor externo (p.ej. banco), 0=No aplica
         // codigo: 0=default, 1=Transferencia, 2=Cheque/Link
