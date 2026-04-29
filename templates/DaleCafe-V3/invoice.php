@@ -70,11 +70,22 @@ $q_money = static function( $amount ) {
     return 'Q.' . number_format( (float) $amount, 2, '.', ',' );
 };
 
-$empresa_nombre = ! empty( $fel_nombre_empresa ) ? $fel_nombre_empresa : get_bloginfo( 'name' );
+$empresa_nombre_opt  = get_option( 'dalecafe_empresa_nombre', '' );
+$empresa_nit_opt     = get_option( 'dalecafe_empresa_nit', '' );
+$empresa_ciudad_opt  = get_option( 'dalecafe_empresa_ciudad', '' );
+$empresa_depto_opt   = get_option( 'dalecafe_empresa_departamento', '' );
+$empresa_nombre      = ! empty( $fel_nombre_empresa ) ? $fel_nombre_empresa : ( ! empty( $empresa_nombre_opt ) ? $empresa_nombre_opt : get_bloginfo( 'name' ) );
+$empresa_nit         = ! empty( $fel_nit_empresa ) ? $fel_nit_empresa : ( ! empty( $empresa_nit_opt ) ? $empresa_nit_opt : 'N/A' );
 
 ob_start();
 $this->shop_address();
 $shop_address = trim( wp_strip_all_tags( ob_get_clean() ) );
+
+if ( empty( $shop_address ) ) {
+    $shop_address = trim( $empresa_ciudad_opt . ( ! empty( $empresa_depto_opt ) ? ', ' . $empresa_depto_opt : '' ) );
+}
+
+$header_fallback_logo = 'https://dalecafe.com/wp-content/uploads/2019/08/Asset-2.png';
 
 $certificador_nombre = $order->get_meta( '_dfc_fel_gface_empresa' );
 $certificador_nit    = $order->get_meta( '_dfc_fel_gface_nit' );
@@ -99,7 +110,7 @@ $certificador_nit    = $order->get_meta( '_dfc_fel_gface_nit' );
                 <?php if ( method_exists( $this, 'has_header_logo' ) && $this->has_header_logo() ) : ?>
                     <?php $this->header_logo(); ?>
                 <?php else : ?>
-                    <h1 class="shop-name"><?php echo esc_html( method_exists( $this, 'get_title' ) ? $this->get_title() : 'DaleCafe' ); ?></h1>
+                    <img src="<?php echo esc_url( $header_fallback_logo ); ?>" alt="DaleCafe" class="header-fallback-logo" />
                 <?php endif; ?>
             </td>
             <td class="invoice-title-cell"></td>
@@ -189,34 +200,33 @@ $certificador_nit    = $order->get_meta( '_dfc_fel_gface_nit' );
     <!-- ===================================================================
          DATOS FEL (Certificación electrónica)
     ==================================================================== -->
-    <?php if ( $fel_certificado ) : ?>
-        <div id="fel-section" class="panel-box <?php echo $fel_es_contingencia ? 'contingencia' : 'principal'; ?>">
-            <div class="panel-title"><?php esc_html_e( 'ESTABLECIMIENTO:', 'dale-facturas' ); ?></div>
-            <?php if ( $fel_es_contingencia ) : ?>
-                <div class="contingencia-banner">
-                    <strong><?php esc_html_e( '⚠ FACTURA DE CONTINGENCIA', 'dale-facturas' ); ?></strong>
-                </div>
-            <?php endif; ?>
+    <div id="fel-section" class="panel-box <?php echo $fel_es_contingencia ? 'contingencia' : 'principal'; ?>">
+        <div class="panel-title"><?php esc_html_e( 'ESTABLECIMIENTO:', 'dale-facturas' ); ?></div>
+        <?php if ( $fel_es_contingencia ) : ?>
+            <div class="contingencia-banner">
+                <strong><?php esc_html_e( '⚠ FACTURA DE CONTINGENCIA', 'dale-facturas' ); ?></strong>
+            </div>
+        <?php endif; ?>
 
-            <div class="section-divider"></div>
+        <div class="section-divider"></div>
 
-            <p class="info-line">
-                <span class="first-text"><?php echo esc_html( $empresa_nombre ); ?> | <?php esc_html_e( 'Dirección:', 'dale-facturas' ); ?> <?php echo esc_html( $shop_address ); ?> | <?php esc_html_e( 'NIT:', 'dale-facturas' ); ?> <?php echo esc_html( $fel_nit_empresa ? $fel_nit_empresa : 'N/A' ); ?></span>
-            </p>
+        <p class="info-line">
+            <span class="first-text"><?php echo esc_html( $empresa_nombre ); ?> | <?php esc_html_e( 'Dirección:', 'dale-facturas' ); ?> <?php echo esc_html( $shop_address ); ?> | <?php esc_html_e( 'NIT:', 'dale-facturas' ); ?> <?php echo esc_html( $empresa_nit ); ?></span>
+        </p>
 
-            <p class="info-line"><span class="first-text"><?php esc_html_e( 'Autorización FEL:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $fel_firma ? $fel_firma : 'N/A' ); ?></span></p>
-            <p class="info-line"><span class="first-text"><?php esc_html_e( 'Certificador:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $certificador_nombre ? $certificador_nombre : 'N/A' ); ?> | <?php esc_html_e( 'NIT:', 'dale-facturas' ); ?> <?php echo esc_html( $certificador_nit ? $certificador_nit : 'N/A' ); ?></span></p>
+        <p class="info-line"><span class="first-text"><?php esc_html_e( 'Autorización FEL:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $fel_firma ? $fel_firma : 'N/A' ); ?></span></p>
+        <p class="info-line"><span class="first-text"><?php esc_html_e( 'Certificador:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $certificador_nombre ? $certificador_nombre : 'N/A' ); ?> | <?php esc_html_e( 'NIT:', 'dale-facturas' ); ?> <?php echo esc_html( $certificador_nit ? $certificador_nit : 'N/A' ); ?></span></p>
 
-            <?php if ( $fel_firma ) : ?>
-                <div class="firma-section">
-                    <strong><?php esc_html_e( 'Firma electrónica:', 'dale-facturas' ); ?></strong>
-                    <div class="firma-text"><?php echo esc_html( $fel_firma ); ?></div>
-                </div>
-            <?php endif; ?>
-        </div>
-    <?php else : ?>
-        <!-- Sin certificación FEL aún -->
-        <div id="fel-section pending">
+        <?php if ( $fel_firma ) : ?>
+            <div class="firma-section">
+                <strong><?php esc_html_e( 'Firma electrónica:', 'dale-facturas' ); ?></strong>
+                <div class="firma-text"><?php echo esc_html( $fel_firma ); ?></div>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <?php if ( ! $fel_certificado ) : ?>
+        <div id="fel-section-pending" class="pending">
             <p class="fel-pending">
                 <?php esc_html_e( 'Esta factura está pendiente de certificación electrónica (FEL).', 'dale-facturas' ); ?>
             </p>
