@@ -430,6 +430,13 @@ class DFC_Invoice_Generator {
         $order->delete_meta_data( self::META_FEL_FIRMA );
         $order->save_meta_data();
 
+        if ( function_exists( 'wc_get_logger' ) ) {
+            wc_get_logger()->error(
+                sprintf( 'Pedido %d: %s', $order->get_id(), $error_msg ),
+                [ 'source' => 'dale-facturas' ]
+            );
+        }
+
         // Agregar nota de error en el pedido
         $order->add_order_note(
             sprintf( __( 'Error al generar factura FEL: %s', 'dale-facturas' ), $error_msg ),

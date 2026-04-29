@@ -60,6 +60,13 @@ class DFC_Product_Mapper {
             return $plu;
         }
 
+        // 1.5. Si el SKU ya es numérico, usarlo directamente como PLU.
+        // Esto cubre productos como SKU "60" que en la integración original
+        // funcionaban implícitamente como PLU 60.
+        if ( ctype_digit( trim( $sku ) ) ) {
+            return (int) $sku;
+        }
+
         // 2. Si el item tiene opciones de molienda, buscar por molienda
         if ( ! empty( $item_data['grind'] ) ) {
             $plu = $this->find_plu_by_grind( $item_data['grind'] );
