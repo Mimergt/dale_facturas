@@ -50,7 +50,9 @@ $billing_nitname  = $order->get_meta( '_billing_nitname' ) ?: $order->get_meta( 
 $billing_name     = trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );
 $billing_email    = $order->get_billing_email();
 $billing_phone    = $order->get_billing_phone();
+$shipping_address = trim( $order->get_shipping_address_1() . ' ' . $order->get_shipping_address_2() . ' ' . $order->get_shipping_city() . ', ' . $order->get_shipping_state() );
 $billing_address  = $order->get_billing_address_1();
+$client_address   = ! empty( $shipping_address ) ? $shipping_address : $billing_address;
 
 // Número de pedido
 $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_number() : $order_id;
@@ -63,6 +65,19 @@ if ( ! is_array( $order_items ) ) {
 if ( ! is_array( $totals ) ) {
     $totals = array();
 }
+
+$q_money = static function( $amount ) {
+    return 'Q.' . number_format( (float) $amount, 2, '.', ',' );
+};
+
+$empresa_nombre = ! empty( $fel_nombre_empresa ) ? $fel_nombre_empresa : get_bloginfo( 'name' );
+
+ob_start();
+$this->shop_address();
+$shop_address = trim( wp_strip_all_tags( ob_get_clean() ) );
+
+$certificador_nombre = $order->get_meta( '_dfc_fel_gface_empresa' );
+$certificador_nit    = $order->get_meta( '_dfc_fel_gface_nit' );
 ?>
 <!DOCTYPE html>
 <html <?php language_attributes(); ?>>
@@ -111,50 +126,9 @@ if ( ! is_array( $totals ) ) {
 </div>
 
 <!-- =====================================================================
-     DATOS DE EMPRESA Y PEDIDO
+     CUERPO
 ====================================================================== -->
 <div id="invoice-body">
-    <table class="info-table">
-        <tr>
-            <!-- Datos del establecimiento -->
-            <td class="shop-info">
-                <?php do_action( 'wpo_wcpdf_before_shop_name', $document_type, $order ); ?>
-                <strong class="shop-name"><?php $this->shop_name(); ?></strong>
-                <?php do_action( 'wpo_wcpdf_after_shop_name', $document_type, $order ); ?>
-                <?php do_action( 'wpo_wcpdf_before_shop_address', $document_type, $order ); ?>
-                <div class="shop-address"><?php $this->shop_address(); ?></div>
-                <?php do_action( 'wpo_wcpdf_after_shop_address', $document_type, $order ); ?>
-                <?php if ( $fel_nit_empresa ) : ?>
-                    <div class="shop-nit">
-                        <strong><?php esc_html_e( 'NIT:', 'dale-facturas' ); ?></strong>
-                        <?php echo esc_html( $fel_nit_empresa ); ?>
-                    </div>
-                <?php endif; ?>
-            </td>
-
-            <!-- Datos del pedido -->
-            <td class="order-data">
-                <table class="order-data-table">
-                    <?php do_action( 'wpo_wcpdf_before_order_data', $document_type, $order ); ?>
-                    <tr>
-                        <th><?php esc_html_e( 'Pedido:', 'dale-facturas' ); ?></th>
-                        <td><?php echo esc_html( $order_number ); ?></td>
-                    </tr>
-                    <tr>
-                        <th><?php esc_html_e( 'Fecha:', 'dale-facturas' ); ?></th>
-                        <td><?php $this->order_date(); ?></td>
-                    </tr>
-                    <?php if ( $fel_fecha_cert ) : ?>
-                        <tr>
-                            <th><?php esc_html_e( 'Certificación:', 'dale-facturas' ); ?></th>
-                            <td><?php echo esc_html( $fel_fecha_cert ); ?></td>
-                        </tr>
-                    <?php endif; ?>
-                    <?php do_action( 'wpo_wcpdf_after_order_data', $document_type, $order ); ?>
-                </table>
-            </td>
-        </tr>
-    </table>
 
     <!-- Datos del cliente -->
     <div id="billing-section" class="panel-box">
@@ -163,28 +137,19 @@ if ( ! is_array( $totals ) ) {
             <tr>
                 <td>
                     <?php do_action( 'wpo_wcpdf_before_billing_address', $document_type, $order ); ?>
-                    <strong><?php esc_html_e( 'Facturar a:', 'dale-facturas' ); ?></strong><br>
-                    <strong><?php esc_html_e( 'NIT:', 'dale-facturas' ); ?></strong>
-                    <?php echo esc_html( $billing_nit ); ?>
-                    <?php if ( $billing_nitname ) : ?>
-                        — <?php echo esc_html( $billing_nitname ); ?>
-                    <?php endif; ?>
-                    <br>
-                    <?php echo esc_html( $billing_name ); ?><br>
-                    <?php echo esc_html( $billing_address ); ?>
+                    <p class="info-line"><span class="first-text"><?php esc_html_e( 'Nombre:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $billing_name ); ?></span></p>
+                    <p class="info-line"><span class="first-text"><?php esc_html_e( 'Dirección:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $client_address ); ?></span></p>
+                    <p class="info-line"><span class="first-text"><?php esc_html_e( 'NIT:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $billing_nit ); ?><?php if ( $billing_nitname ) : ?> - <?php echo esc_html( $billing_nitname ); ?><?php endif; ?></span></p>
                     <?php do_action( 'wpo_wcpdf_after_billing_address', $document_type, $order ); ?>
                 </td>
                 <td>
                     <?php if ( $billing_email ) : ?>
-                        <strong><?php esc_html_e( 'Email:', 'dale-facturas' ); ?></strong>
-                        <?php echo esc_html( $billing_email ); ?><br>
+                        <p class="info-line"><span class="first-text"><?php esc_html_e( 'Email:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $billing_email ); ?></span></p>
                     <?php endif; ?>
                     <?php if ( $billing_phone ) : ?>
-                        <strong><?php esc_html_e( 'Teléfono:', 'dale-facturas' ); ?></strong>
-                        <?php echo esc_html( $billing_phone ); ?><br>
+                        <p class="info-line"><span class="first-text"><?php esc_html_e( 'Teléfono:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $billing_phone ); ?></span></p>
                     <?php endif; ?>
-                    <strong><?php esc_html_e( 'Pago:', 'dale-facturas' ); ?></strong>
-                    <?php $this->payment_method(); ?>
+                    <p class="info-line"><span class="first-text"><?php esc_html_e( 'Pago:', 'dale-facturas' ); ?></span> <span class="second-text"><?php $this->payment_method(); ?></span></p>
                 </td>
             </tr>
         </table>
@@ -196,41 +161,28 @@ if ( ! is_array( $totals ) ) {
     <?php do_action( 'wpo_wcpdf_before_order_details', $document_type, $order ); ?>
     <div class="panel-box">
         <div class="panel-title"><?php esc_html_e( 'DETALLE DE COMPRA:', 'dale-facturas' ); ?></div>
-    <table class="order-details">
-        <thead>
-            <tr>
-                <th class="col-product"><?php esc_html_e( 'Producto', 'dale-facturas' ); ?></th>
-                <th class="col-qty"><?php esc_html_e( 'Cantidad', 'dale-facturas' ); ?></th>
-                <th class="col-price"><?php esc_html_e( 'Precio unit.', 'dale-facturas' ); ?></th>
-                <th class="col-total"><?php esc_html_e( 'Total', 'dale-facturas' ); ?></th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach ( $order_items as $item_id => $item ) : ?>
-                <tr class="<?php echo esc_attr( apply_filters( 'wpo_wcpdf_item_row_class', $item_id, $document_type, $order, $item_id ) ); ?>">
-                    <td class="col-product">
-                        <?php echo wp_kses_post( isset( $item['name'] ) ? $item['name'] : '' ); ?>
-                        <?php do_action( 'wpo_wcpdf_before_item_meta', $document_type, $item, $order ); ?>
-                        <?php if ( isset( $item['meta'] ) ) : ?>
-                            <?php echo wp_kses_post( $item['meta'] ); ?>
-                        <?php endif; ?>
-                        <?php do_action( 'wpo_wcpdf_after_item_meta', $document_type, $item, $order ); ?>
-                    </td>
-                    <td class="col-qty"><?php echo esc_html( isset( $item['quantity'] ) ? $item['quantity'] : '' ); ?></td>
-                    <td class="col-price"><?php echo wp_kses_post( isset( $item['single_price'] ) ? $item['single_price'] : ( isset( $item['price'] ) ? $item['price'] : '' ) ); ?></td>
-                    <td class="col-total"><?php echo wp_kses_post( isset( $item['line_total'] ) ? $item['line_total'] : ( isset( $item['total'] ) ? $item['total'] : '' ) ); ?></td>
-                </tr>
-            <?php endforeach; ?>
-        </tbody>
-        <tfoot>
-            <?php foreach ( $totals as $key => $total ) : ?>
-                <tr class="<?php echo esc_attr( $key ); ?>">
-                    <td colspan="3" class="col-label"><?php echo wp_kses_post( isset( $total['label'] ) ? $total['label'] : '' ); ?></td>
-                    <td class="col-total"><?php echo wp_kses_post( isset( $total['value'] ) ? $total['value'] : '' ); ?></td>
-                </tr>
-            <?php endforeach; ?>
-        </tfoot>
-    </table>
+    <div class="section-divider"></div>
+    <?php foreach ( $order_items as $item_id => $item ) : ?>
+        <div class="detail-row <?php echo esc_attr( apply_filters( 'wpo_wcpdf_item_row_class', $item_id, $document_type, $order, $item_id ) ); ?>">
+            <span class="first-text">
+                <?php echo esc_html( isset( $item['name'] ) ? wp_strip_all_tags( $item['name'] ) : '' ); ?>
+                <span class="qty-text">(X <?php echo esc_html( isset( $item['quantity'] ) ? $item['quantity'] : '' ); ?>)</span>
+            </span>
+            <span class="second-text product-cost"><?php echo wp_kses_post( isset( $item['line_total'] ) ? $item['line_total'] : ( isset( $item['total'] ) ? $item['total'] : '' ) ); ?></span>
+        </div>
+        <?php if ( isset( $item['meta'] ) && ! empty( trim( wp_strip_all_tags( $item['meta'] ) ) ) ) : ?>
+            <div class="detail-meta"><?php echo wp_kses_post( $item['meta'] ); ?></div>
+        <?php endif; ?>
+    <?php endforeach; ?>
+
+    <div class="section-divider section-divider-large"></div>
+
+    <p class="total-line"><span class="first-text"><?php esc_html_e( 'Sub total:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $q_money( $order->get_subtotal() ) ); ?></span></p>
+    <p class="total-line"><span class="first-text"><?php esc_html_e( 'Envío:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $order->get_shipping_method() ); ?> <?php echo esc_html( $q_money( $order->get_shipping_total() ) ); ?></span></p>
+    <p class="total-line"><span class="first-text"><?php esc_html_e( 'Descuento:', 'dale-facturas' ); ?></span> <span class="second-text product-cost"><?php echo esc_html( $q_money( $order->get_discount_total() ) ); ?></span></p>
+
+    <div class="section-divider section-divider-large"></div>
+    <p class="grand-total"><span class="total-text"><?php esc_html_e( 'Total:', 'dale-facturas' ); ?></span> <span class="second-text product-cost"><?php echo esc_html( $q_money( $order->get_total() ) ); ?></span></p>
     </div>
     <?php do_action( 'wpo_wcpdf_after_order_details', $document_type, $order ); ?>
 
@@ -246,46 +198,14 @@ if ( ! is_array( $totals ) ) {
                 </div>
             <?php endif; ?>
 
-            <table class="fel-data-table">
-                <tr>
-                    <td>
-                        <div class="fel-row">
-                            <strong><?php esc_html_e( 'Serie:', 'dale-facturas' ); ?></strong>
-                            <span><?php echo esc_html( $fel_serie ); ?></span>
-                        </div>
-                        <div class="fel-row">
-                            <strong><?php esc_html_e( 'Número:', 'dale-facturas' ); ?></strong>
-                            <span><?php echo esc_html( $fel_transaccion ); ?></span>
-                        </div>
-                        <?php if ( $fel_resolucion_num ) : ?>
-                            <div class="fel-row">
-                                <strong><?php esc_html_e( 'Resolución:', 'dale-facturas' ); ?></strong>
-                                <span><?php echo esc_html( $fel_resolucion_num ); ?></span>
-                            </div>
-                        <?php endif; ?>
-                        <?php if ( $fel_resolucion_fecha ) : ?>
-                            <div class="fel-row">
-                                <strong><?php esc_html_e( 'Fecha resolución:', 'dale-facturas' ); ?></strong>
-                                <span><?php echo esc_html( $fel_resolucion_fecha ); ?></span>
-                            </div>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if ( $fel_fecha_cert ) : ?>
-                            <div class="fel-row">
-                                <strong><?php esc_html_e( 'Fecha y hora certificación:', 'dale-facturas' ); ?></strong>
-                                <span><?php echo esc_html( $fel_fecha_cert ); ?></span>
-                            </div>
-                        <?php endif; ?>
-                        <?php if ( $fel_numero_acceso ) : ?>
-                            <div class="fel-row">
-                                <strong><?php esc_html_e( 'Número de acceso:', 'dale-facturas' ); ?></strong>
-                                <span><?php echo esc_html( $fel_numero_acceso ); ?></span>
-                            </div>
-                        <?php endif; ?>
-                    </td>
-                </tr>
-            </table>
+            <div class="section-divider"></div>
+
+            <p class="info-line">
+                <span class="first-text"><?php echo esc_html( $empresa_nombre ); ?> | <?php esc_html_e( 'Dirección:', 'dale-facturas' ); ?> <?php echo esc_html( $shop_address ); ?> | <?php esc_html_e( 'NIT:', 'dale-facturas' ); ?> <?php echo esc_html( $fel_nit_empresa ? $fel_nit_empresa : 'N/A' ); ?></span>
+            </p>
+
+            <p class="info-line"><span class="first-text"><?php esc_html_e( 'Autorización FEL:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $fel_firma ? $fel_firma : 'N/A' ); ?></span></p>
+            <p class="info-line"><span class="first-text"><?php esc_html_e( 'Certificador:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $certificador_nombre ? $certificador_nombre : 'N/A' ); ?> | <?php esc_html_e( 'NIT:', 'dale-facturas' ); ?> <?php echo esc_html( $certificador_nit ? $certificador_nit : 'N/A' ); ?></span></p>
 
             <?php if ( $fel_firma ) : ?>
                 <div class="firma-section">
@@ -316,6 +236,7 @@ if ( ! is_array( $totals ) ) {
         <?php endif; ?>
     </div>
     <?php do_action( 'wpo_wcpdf_after_footer', $document_type, $order ); ?>
+    <p class="regimen-isr"><strong><?php esc_html_e( 'Régimen ISR: SUJETO A PAGOS TRIMESTRALES', 'dale-facturas' ); ?></strong></p>
 </div>
 
 <?php do_action( 'wpo_wcpdf_after_document', $document_type, $order ); ?>

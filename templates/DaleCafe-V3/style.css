@@ -1,152 +1,103 @@
-/* DaleCafe-V3 style.css for WPO WCPDF */
+/* DaleCafe-V3 style.css aligned to factura-principal.php look */
 
-* {
-    box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body {
-    font-family: DejaVu Sans, Arial, sans-serif;
-    font-size: 9pt;
-    color: #3a3a3a;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    color: #5c4943;
     line-height: 1.35;
 }
 
 #invoice-header {
     background: #5c4740;
-    border-radius: 6px;
+    border-radius: 5px;
     margin: 0 0 10px 0;
-    padding: 10px 12px;
+    padding: 8px 12px;
 }
 
-.header-table {
-    width: 100%;
-    border-collapse: collapse;
-}
-
-.logo-cell {
-    text-align: center;
-}
-
-.logo-cell img {
-    max-height: 26px;
-    width: auto;
-}
-
-.shop-name {
-    color: #ffffff;
-    font-size: 14pt;
-    font-weight: bold;
-}
-
-.invoice-title-cell {
-    width: 1%;
-}
+.header-table { width: 100%; border-collapse: collapse; }
+.logo-cell { text-align: center; }
+.logo-cell img { max-height: 28px; width: auto; }
+.shop-name { color: #ffffff; font-size: 14pt; font-weight: bold; }
 
 .panel-box {
-    border: 1px solid #9ec3ea;
-    border-radius: 4px;
-    margin: 0 0 8px 0;
-    padding: 8px 10px;
+    border: 1px solid #69a4e0;
+    border-radius: 5px;
+    margin: 0 0 10px 0;
+    padding: 5px 0 8px 0;
     background: #ffffff;
 }
 
 .panel-title {
-    color: #66a9ea;
-    font-size: 10pt;
+    color: #69a4e0;
+    font-size: 14px;
     font-weight: bold;
     text-transform: uppercase;
-    border-bottom: 1px solid #d4dbe3;
-    padding: 0 0 4px 0;
-    margin: 0 0 6px 0;
+    padding: 0 25px;
+    margin: 0 0 5px 0;
 }
 
 .dte-box .panel-line {
-    margin: 0 0 2px 0;
-    font-size: 8.5pt;
+    margin: 0 0 4px 0;
+    padding: 0 25px;
+    color: #5c4943;
 }
 
-.info-table,
-.billing-table,
-.order-data-table,
-.fel-data-table {
-    width: 100%;
-    border-collapse: collapse;
+.billing-table { width: 100%; border-collapse: collapse; }
+.billing-table td { width: 50%; vertical-align: top; padding: 0 25px; }
+
+.info-line,
+.fel-row {
+    margin: 0 0 5px 0;
+    font-size: 12px;
+    color: #5c4943;
 }
 
-.info-table td,
-.billing-table td,
-.fel-data-table td {
-    vertical-align: top;
+.first-text,
+.second-text { color: #5c4943; }
+.product-cost { font-weight: 800; }
+
+.section-divider {
+    border-bottom: 2px solid #cccccc;
+    margin: 0 20px 8px 20px;
 }
 
-.info-table .shop-info {
-    width: 58%;
+.section-divider-large { margin-top: 10px; }
+
+.detail-row {
+    margin: 0 0 4px 0;
+    padding: 0 25px;
+    color: #5c4943;
+    clear: both;
 }
 
-.info-table .order-data {
-    width: 42%;
+.detail-row .first-text { display: inline-block; max-width: 76%; }
+.detail-row .second-text { float: right; text-align: right; }
+.qty-text { font-size: 10px; }
+
+.detail-meta {
+    margin: 0 25px 4px 25px;
+    color: #6d5a54;
+    font-size: 10px;
 }
 
-.order-data-table th {
-    text-align: left;
-    padding: 1px 6px 1px 0;
-    color: #666;
-    font-weight: normal;
-    white-space: nowrap;
+.total-line {
+    margin: 0 0 4px 0;
+    padding: 0 25px;
+    color: #5c4943;
+    font-size: 14px;
 }
 
-.order-data-table td {
-    text-align: right;
-    padding: 1px 0;
+.grand-total {
+    margin: 0;
+    padding: 0 25px;
+    color: #69a4e0;
+    font-size: 16px;
 }
 
-.order-details {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 2px;
-}
-
-.order-details thead th {
-    text-align: left;
-    border-bottom: 1px solid #ccd5df;
-    color: #4f4f4f;
-    font-size: 8.5pt;
-    padding: 3px 4px;
-}
-
-.order-details .col-qty,
-.order-details .col-price,
-.order-details .col-total {
-    text-align: right;
-    white-space: nowrap;
-}
-
-.order-details .col-qty {
-    width: 52px;
-}
-
-.order-details .col-price,
-.order-details .col-total {
-    width: 82px;
-}
-
-.order-details tbody td {
-    padding: 3px 4px;
-    border-bottom: 1px solid #edf2f7;
-}
-
-.order-details tfoot td {
-    padding: 4px;
-    border-top: 1px solid #d6dde6;
-}
-
-.order-details tfoot .col-label {
-    text-align: right;
-    font-weight: bold;
-}
-
-.order-details tfoot .col-total {
-    text-align: right;
+.total-text {
+    color: #69a4e0;
     font-weight: bold;
 }
 
@@ -157,40 +108,41 @@ body {
 
 .contingencia-banner {
     background: #f07f45;
-    color: #fff;
+    color: #ffffff;
     font-weight: bold;
-    padding: 4px 6px;
-    margin: 0 0 6px 0;
     border-radius: 3px;
-    font-size: 8.5pt;
-}
-
-.fel-row {
-    margin: 0 0 3px 0;
-    font-size: 8.5pt;
+    margin: 0 25px 8px 25px;
+    padding: 4px 6px;
+    font-size: 11px;
 }
 
 .firma-section {
-    margin-top: 6px;
+    margin: 6px 25px 0 25px;
     border-top: 1px solid #d8e1ea;
     padding-top: 5px;
 }
 
 .firma-text {
-    font-size: 7pt;
     color: #666;
+    font-size: 10px;
     word-break: break-all;
 }
 
 .fel-pending {
-    font-style: italic;
     color: #7b7b7b;
+    font-style: italic;
+    margin: 0 25px;
 }
 
 #invoice-footer {
-    margin-top: 8px;
+    margin-top: 18px;
     text-align: center;
-    color: #74a8df;
-    font-size: 8pt;
+    color: #69a4e0;
+    font-size: 12px;
     font-weight: bold;
+}
+
+.regimen-isr {
+    margin: 0;
+    line-height: 10px;
 }
