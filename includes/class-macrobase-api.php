@@ -129,10 +129,15 @@ class DFC_Macrobase_API {
             return new WP_Error( 'dfc_api_http_error', $error_msg );
         }
 
+        $factura = $json;
+        if ( isset( $json['facturas'] ) && is_array( $json['facturas'] ) && ! empty( $json['facturas'][0] ) && is_array( $json['facturas'][0] ) ) {
+            $factura = $json['facturas'][0];
+        }
+
         // Validar estructura de respuesta
         // En modo principal: debe tener serie, transaccion, firmaElectronica
         // En modo contingencia: serie, transaccion, sin firma
-        if ( ! isset( $json['serie'] ) || ! isset( $json['transaccion'] ) ) {
+        if ( ! isset( $factura['serie'] ) || ! isset( $factura['transaccion'] ) ) {
             return new WP_Error(
                 'dfc_api_invalid_structure',
                 __( 'La respuesta del API no tiene la estructura esperada (falta serie o transaccion).', 'dale-facturas' )
@@ -140,12 +145,13 @@ class DFC_Macrobase_API {
         }
 
         return [
-            'serie'               => $json['serie'],
-            'transaccion'         => $json['transaccion'],
-            'firmaElectronica'    => $json['firmaElectronica'] ?? '',
-            'esContingencia'      => ! isset( $json['firmaElectronica'] ) || empty( $json['firmaElectronica'] ),
-            'codigoFel'           => $json['codigoFel'] ?? '',
-            'numeroFel'           => $json['numeroFel'] ?? '',
+            'serie'               => $factura['serie'],
+            'transaccion'         => $factura['transaccion'],
+            'firmaElectronica'    => $factura['firmaElectronica'] ?? '',
+            'esContingencia'      => ! isset( $factura['firmaElectronica'] ) || empty( $factura['firmaElectronica'] ),
+            'codigoFel'           => $factura['codigoFel'] ?? '',
+            'numeroFel'           => $factura['numeroFel'] ?? '',
+            'factura'             => $factura,
             'respuesta_completa'  => $json,
         ];
     }

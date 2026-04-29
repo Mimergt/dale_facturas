@@ -52,33 +52,51 @@ if ( is_array( $api_response ) ) {
         : $api_response;
 }
 
-if ( empty( $fel_serie ) && ! empty( $respuesta_completa['serie'] ) ) {
-    $fel_serie = $respuesta_completa['serie'];
-}
-if ( empty( $fel_transaccion ) && ! empty( $respuesta_completa['transaccion'] ) ) {
-    $fel_transaccion = $respuesta_completa['transaccion'];
-}
-if ( empty( $fel_firma ) && ! empty( $respuesta_completa['firmaElectronica'] ) ) {
-    $fel_firma = $respuesta_completa['firmaElectronica'];
-}
-if ( empty( $fel_nit_empresa ) && ! empty( $respuesta_completa['empresaNit'] ) ) {
-    $fel_nit_empresa = $respuesta_completa['empresaNit'];
-}
-if ( empty( $fel_nombre_empresa ) && ! empty( $respuesta_completa['empresaNombre'] ) ) {
-    $fel_nombre_empresa = $respuesta_completa['empresaNombre'];
-}
-if ( empty( $fel_establecimiento ) && ! empty( $respuesta_completa['establecimientoNombre'] ) ) {
-    $fel_establecimiento = $respuesta_completa['establecimientoNombre'];
+$factura_respuesta = isset( $api_response['factura'] ) && is_array( $api_response['factura'] )
+    ? $api_response['factura']
+    : array();
+
+if ( empty( $factura_respuesta ) && isset( $respuesta_completa['facturas'] ) && is_array( $respuesta_completa['facturas'] ) && ! empty( $respuesta_completa['facturas'][0] ) && is_array( $respuesta_completa['facturas'][0] ) ) {
+    $factura_respuesta = $respuesta_completa['facturas'][0];
 }
 
-$establecimiento_direccion = ! empty( $respuesta_completa['establecimientoDireccion'] )
-    ? $respuesta_completa['establecimientoDireccion']
+if ( empty( $factura_respuesta ) && is_array( $respuesta_completa ) ) {
+    $factura_respuesta = $respuesta_completa;
+}
+
+if ( empty( $fel_serie ) && ! empty( $factura_respuesta['serie'] ) ) {
+    $fel_serie = $factura_respuesta['serie'];
+}
+if ( empty( $fel_transaccion ) && ! empty( $factura_respuesta['transaccion'] ) ) {
+    $fel_transaccion = $factura_respuesta['transaccion'];
+}
+if ( empty( $fel_firma ) && ! empty( $factura_respuesta['firmaElectronica'] ) ) {
+    $fel_firma = $factura_respuesta['firmaElectronica'];
+}
+if ( empty( $fel_nit_empresa ) && ! empty( $factura_respuesta['empresaNit'] ) ) {
+    $fel_nit_empresa = $factura_respuesta['empresaNit'];
+}
+if ( empty( $fel_nombre_empresa ) && ! empty( $factura_respuesta['empresaNombre'] ) ) {
+    $fel_nombre_empresa = $factura_respuesta['empresaNombre'];
+}
+if ( empty( $fel_establecimiento ) && ! empty( $factura_respuesta['establecimientoNombre'] ) ) {
+    $fel_establecimiento = $factura_respuesta['establecimientoNombre'];
+}
+if ( empty( $fel_fecha_cert ) && ! empty( $factura_respuesta['fechaHoraCertificacion'] ) ) {
+    $fel_fecha_cert = $factura_respuesta['fechaHoraCertificacion'];
+}
+if ( empty( $fel_numero_acceso ) && ! empty( $factura_respuesta['faceId'] ) ) {
+    $fel_numero_acceso = $factura_respuesta['faceId'];
+}
+
+$establecimiento_direccion = ! empty( $factura_respuesta['establecimientoDireccion'] )
+    ? $factura_respuesta['establecimientoDireccion']
     : '';
-$certificador_nombre = ! empty( $respuesta_completa['gfaceEmpresa'] )
-    ? $respuesta_completa['gfaceEmpresa']
+$certificador_nombre = ! empty( $factura_respuesta['gfaceEmpresa'] )
+    ? $factura_respuesta['gfaceEmpresa']
     : $order->get_meta( '_dfc_fel_gface_empresa' );
-$certificador_nit = ! empty( $respuesta_completa['gfaceNit'] )
-    ? $respuesta_completa['gfaceNit']
+$certificador_nit = ! empty( $factura_respuesta['gfaceNit'] )
+    ? $factura_respuesta['gfaceNit']
     : $order->get_meta( '_dfc_fel_gface_nit' );
 
 $fel_certificado = ! empty( $fel_serie ) && ! empty( $fel_transaccion );
@@ -126,11 +144,11 @@ if ( empty( $shop_address ) ) {
 
 $header_fallback_logo = 'https://dalecafe.com/wp-content/uploads/2019/08/Asset-2.png';
 
-$factura_referencia  = ! empty( $respuesta_completa['serieInterna'] ) || ! empty( $respuesta_completa['transaccionInterna'] )
-    ? trim( ( $respuesta_completa['serieInterna'] ?? '' ) . ' ' . ( $respuesta_completa['transaccionInterna'] ?? '' ) )
+$factura_referencia  = ! empty( $factura_respuesta['serieInterna'] ) || ! empty( $factura_respuesta['transaccionInterna'] )
+    ? trim( ( $factura_respuesta['serieInterna'] ?? '' ) . ' ' . ( $factura_respuesta['transaccionInterna'] ?? '' ) )
     : $order_number;
-$fecha_emision       = ! empty( $respuesta_completa['fechaEmision'] )
-    ? $respuesta_completa['fechaEmision']
+$fecha_emision       = ! empty( $factura_respuesta['fechaEmision'] )
+    ? $factura_respuesta['fechaEmision']
     : ( $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '' );
 $establecimiento_info = array_filter( array(
     $fel_establecimiento ? $fel_establecimiento : $empresa_nombre,

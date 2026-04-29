@@ -87,6 +87,8 @@ class DFC_Invoice_Generator {
             return $result;
         }
 
+        $factura = isset( $result['factura'] ) && is_array( $result['factura'] ) ? $result['factura'] : [];
+
         // 3. Guardar respuesta en meta
         $order->update_meta_data( self::META_API_RESPONSE, wp_json_encode( $result ) );
         $order->update_meta_data( self::META_FEL_SERIE, $result['serie'] );
@@ -94,6 +96,34 @@ class DFC_Invoice_Generator {
         $order->update_meta_data( self::META_FEL_FIRMA, $result['firmaElectronica'] ?? '' );
         $order->update_meta_data( self::META_FEL_CONTINGENCIA, $result['esContingencia'] ? '1' : '0' );
         $order->update_meta_data( self::META_FEL_TIMESTAMP, time() );
+
+        if ( ! empty( $factura['fechaHoraCertificacion'] ) ) {
+            $order->update_meta_data( '_dfc_fel_fecha_certificacion', $factura['fechaHoraCertificacion'] );
+        }
+        if ( ! empty( $factura['faceId'] ) ) {
+            $order->update_meta_data( '_dfc_fel_numero_acceso', $factura['faceId'] );
+        }
+        if ( ! empty( $factura['empresaNit'] ) ) {
+            $order->update_meta_data( '_dfc_fel_nit_empresa', $factura['empresaNit'] );
+        }
+        if ( ! empty( $factura['empresaNombre'] ) ) {
+            $order->update_meta_data( '_dfc_fel_nombre_empresa', $factura['empresaNombre'] );
+        }
+        if ( ! empty( $factura['establecimientoNombre'] ) ) {
+            $order->update_meta_data( '_dfc_fel_establecimiento_nombre', $factura['establecimientoNombre'] );
+        }
+        if ( ! empty( $factura['resolucionNumero'] ) ) {
+            $order->update_meta_data( '_dfc_fel_resolucion_numero', $factura['resolucionNumero'] );
+        }
+        if ( ! empty( $factura['resolucionFecha'] ) ) {
+            $order->update_meta_data( '_dfc_fel_resolucion_fecha', $factura['resolucionFecha'] );
+        }
+        if ( ! empty( $factura['gfaceEmpresa'] ) ) {
+            $order->update_meta_data( '_dfc_fel_gface_empresa', $factura['gfaceEmpresa'] );
+        }
+        if ( ! empty( $factura['gfaceNit'] ) ) {
+            $order->update_meta_data( '_dfc_fel_gface_nit', $factura['gfaceNit'] );
+        }
 
         // Limpiar error si antes lo había
         $order->delete_meta_data( self::META_FEL_ERROR );
