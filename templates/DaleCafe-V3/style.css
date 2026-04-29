@@ -1,0 +1,196 @@
+/* DaleCafe-V3 style.css for WPO WCPDF */
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: DejaVu Sans, Arial, sans-serif;
+    font-size: 9pt;
+    color: #3a3a3a;
+    line-height: 1.35;
+}
+
+#invoice-header {
+    background: #5c4740;
+    border-radius: 6px;
+    margin: 0 0 10px 0;
+    padding: 10px 12px;
+}
+
+.header-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.logo-cell {
+    text-align: center;
+}
+
+.logo-cell img {
+    max-height: 26px;
+    width: auto;
+}
+
+.shop-name {
+    color: #ffffff;
+    font-size: 14pt;
+    font-weight: bold;
+}
+
+.invoice-title-cell {
+    width: 1%;
+}
+
+.panel-box {
+    border: 1px solid #9ec3ea;
+    border-radius: 4px;
+    margin: 0 0 8px 0;
+    padding: 8px 10px;
+    background: #ffffff;
+}
+
+.panel-title {
+    color: #66a9ea;
+    font-size: 10pt;
+    font-weight: bold;
+    text-transform: uppercase;
+    border-bottom: 1px solid #d4dbe3;
+    padding: 0 0 4px 0;
+    margin: 0 0 6px 0;
+}
+
+.dte-box .panel-line {
+    margin: 0 0 2px 0;
+    font-size: 8.5pt;
+}
+
+.info-table,
+.billing-table,
+.order-data-table,
+.fel-data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.info-table td,
+.billing-table td,
+.fel-data-table td {
+    vertical-align: top;
+}
+
+.info-table .shop-info {
+    width: 58%;
+}
+
+.info-table .order-data {
+    width: 42%;
+}
+
+.order-data-table th {
+    text-align: left;
+    padding: 1px 6px 1px 0;
+    color: #666;
+    font-weight: normal;
+    white-space: nowrap;
+}
+
+.order-data-table td {
+    text-align: right;
+    padding: 1px 0;
+}
+
+.order-details {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 2px;
+}
+
+.order-details thead th {
+    text-align: left;
+    border-bottom: 1px solid #ccd5df;
+    color: #4f4f4f;
+    font-size: 8.5pt;
+    padding: 3px 4px;
+}
+
+.order-details .col-qty,
+.order-details .col-price,
+.order-details .col-total {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.order-details .col-qty {
+    width: 52px;
+}
+
+.order-details .col-price,
+.order-details .col-total {
+    width: 82px;
+}
+
+.order-details tbody td {
+    padding: 3px 4px;
+    border-bottom: 1px solid #edf2f7;
+}
+
+.order-details tfoot td {
+    padding: 4px;
+    border-top: 1px solid #d6dde6;
+}
+
+.order-details tfoot .col-label {
+    text-align: right;
+    font-weight: bold;
+}
+
+.order-details tfoot .col-total {
+    text-align: right;
+    font-weight: bold;
+}
+
+#fel-section.contingencia {
+    border-color: #efb08f;
+    background: #fff8f3;
+}
+
+.contingencia-banner {
+    background: #f07f45;
+    color: #fff;
+    font-weight: bold;
+    padding: 4px 6px;
+    margin: 0 0 6px 0;
+    border-radius: 3px;
+    font-size: 8.5pt;
+}
+
+.fel-row {
+    margin: 0 0 3px 0;
+    font-size: 8.5pt;
+}
+
+.firma-section {
+    margin-top: 6px;
+    border-top: 1px solid #d8e1ea;
+    padding-top: 5px;
+}
+
+.firma-text {
+    font-size: 7pt;
+    color: #666;
+    word-break: break-all;
+}
+
+.fel-pending {
+    font-style: italic;
+    color: #7b7b7b;
+}
+
+#invoice-footer {
+    margin-top: 8px;
+    text-align: center;
+    color: #74a8df;
+    font-size: 8pt;
+    font-weight: bold;
+}

@@ -87,32 +87,27 @@ if ( ! is_array( $totals ) ) {
                     <h1 class="shop-name"><?php echo esc_html( method_exists( $this, 'get_title' ) ? $this->get_title() : 'DaleCafe' ); ?></h1>
                 <?php endif; ?>
             </td>
-            <td class="invoice-title-cell">
-                <?php if ( $fel_es_contingencia ) : ?>
-                    <div class="invoice-type contingencia">
-                        <span class="label"><?php esc_html_e( 'FACTURA DE CONTINGENCIA', 'dale-facturas' ); ?></span>
-                    </div>
-                <?php else : ?>
-                    <div class="invoice-type principal">
-                        <span class="label"><?php esc_html_e( 'FACTURA', 'dale-facturas' ); ?></span>
-                    </div>
-                <?php endif; ?>
-
-                <?php if ( $fel_certificado ) : ?>
-                    <div class="fel-serie-box">
-                        <div class="fel-serie">
-                            <strong><?php esc_html_e( 'Serie:', 'dale-facturas' ); ?></strong>
-                            <?php echo esc_html( $fel_serie ); ?>
-                        </div>
-                        <div class="fel-transaccion">
-                            <strong><?php esc_html_e( 'No.:', 'dale-facturas' ); ?></strong>
-                            <?php echo esc_html( $fel_transaccion ); ?>
-                        </div>
-                    </div>
-                <?php endif; ?>
-            </td>
+            <td class="invoice-title-cell"></td>
         </tr>
     </table>
+</div>
+
+<div class="panel-box dte-box">
+    <div class="panel-title"><?php esc_html_e( 'DOCUMENTO TRIBUTARIO ELECTRONICO', 'dale-facturas' ); ?></div>
+    <div class="panel-line">
+        <?php esc_html_e( 'Factura electrónica en línea, Serie:', 'dale-facturas' ); ?>
+        <strong><?php echo esc_html( $fel_serie ? $fel_serie : 'N/A' ); ?></strong>
+        <?php esc_html_e( 'Número:', 'dale-facturas' ); ?>
+        <strong><?php echo esc_html( $fel_transaccion ? $fel_transaccion : 'N/A' ); ?></strong>
+    </div>
+    <div class="panel-line">
+        <?php esc_html_e( 'Referencia:', 'dale-facturas' ); ?>
+        <strong><?php echo esc_html( $order_number ); ?></strong>
+    </div>
+    <div class="panel-line">
+        <?php esc_html_e( 'Fecha y hora de emisión:', 'dale-facturas' ); ?>
+        <strong><?php echo esc_html( $order->get_date_created() ? $order->get_date_created()->date_i18n( 'd/m/Y H:i' ) : '' ); ?></strong>
+    </div>
 </div>
 
 <!-- =====================================================================
@@ -162,7 +157,8 @@ if ( ! is_array( $totals ) ) {
     </table>
 
     <!-- Datos del cliente -->
-    <div id="billing-section">
+    <div id="billing-section" class="panel-box">
+        <div class="panel-title"><?php esc_html_e( 'DATOS DEL CLIENTE:', 'dale-facturas' ); ?></div>
         <table class="billing-table">
             <tr>
                 <td>
@@ -198,6 +194,8 @@ if ( ! is_array( $totals ) ) {
          TABLA DE PRODUCTOS
     ==================================================================== -->
     <?php do_action( 'wpo_wcpdf_before_order_details', $document_type, $order ); ?>
+    <div class="panel-box">
+        <div class="panel-title"><?php esc_html_e( 'DETALLE DE COMPRA:', 'dale-facturas' ); ?></div>
     <table class="order-details">
         <thead>
             <tr>
@@ -233,13 +231,15 @@ if ( ! is_array( $totals ) ) {
             <?php endforeach; ?>
         </tfoot>
     </table>
+    </div>
     <?php do_action( 'wpo_wcpdf_after_order_details', $document_type, $order ); ?>
 
     <!-- ===================================================================
          DATOS FEL (Certificación electrónica)
     ==================================================================== -->
     <?php if ( $fel_certificado ) : ?>
-        <div id="fel-section" class="<?php echo $fel_es_contingencia ? 'contingencia' : 'principal'; ?>">
+        <div id="fel-section" class="panel-box <?php echo $fel_es_contingencia ? 'contingencia' : 'principal'; ?>">
+            <div class="panel-title"><?php esc_html_e( 'ESTABLECIMIENTO:', 'dale-facturas' ); ?></div>
             <?php if ( $fel_es_contingencia ) : ?>
                 <div class="contingencia-banner">
                     <strong><?php esc_html_e( '⚠ FACTURA DE CONTINGENCIA', 'dale-facturas' ); ?></strong>
