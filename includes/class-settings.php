@@ -49,20 +49,21 @@ class DFC_Settings {
      * Registrar las opciones con la Settings API de WordPress.
      */
     public function register_settings(): void {
-        // Grupo de opciones de API
-        register_setting( 'dfc_settings_api', self::OPTION_API_URL,     [ 'sanitize_callback' => 'esc_url_raw' ] );
-        register_setting( 'dfc_settings_api', self::OPTION_API_USUARIO, [ 'sanitize_callback' => 'sanitize_text_field' ] );
-        register_setting( 'dfc_settings_api', self::OPTION_API_CLAVE,   [ 'sanitize_callback' => 'sanitize_text_field' ] );
-        register_setting( 'dfc_settings_api', self::OPTION_API_MODE,    [
+        // IMPORTANTE: Usar un único grupo para evitar conflictos con settings_fields()
+        // que solo envía un option_page por formulario.
+        
+        register_setting( 'dfc_settings', self::OPTION_API_URL,     [ 'sanitize_callback' => 'esc_url_raw' ] );
+        register_setting( 'dfc_settings', self::OPTION_API_USUARIO, [ 'sanitize_callback' => 'sanitize_text_field' ] );
+        register_setting( 'dfc_settings', self::OPTION_API_CLAVE,   [ 'sanitize_callback' => 'sanitize_text_field' ] );
+        register_setting( 'dfc_settings', self::OPTION_API_MODE,    [
             'sanitize_callback' => function ( $value ) {
                 return in_array( $value, [ 'production', 'test' ], true ) ? $value : 'production';
             },
         ] );
 
-        // Grupo de opciones de comportamiento
-        register_setting( 'dfc_settings_behavior', self::OPTION_AUTO_INVOICE,          [ 'sanitize_callback' => 'absint' ] );
-        register_setting( 'dfc_settings_behavior', self::OPTION_INVOICE_SUBSCRIPTIONS, [ 'sanitize_callback' => 'absint' ] );
-        register_setting( 'dfc_settings_behavior', self::OPTION_DEBUG_MODE,            [ 'sanitize_callback' => 'absint' ] );
+        register_setting( 'dfc_settings', self::OPTION_AUTO_INVOICE,          [ 'sanitize_callback' => 'absint' ] );
+        register_setting( 'dfc_settings', self::OPTION_INVOICE_SUBSCRIPTIONS, [ 'sanitize_callback' => 'absint' ] );
+        register_setting( 'dfc_settings', self::OPTION_DEBUG_MODE,            [ 'sanitize_callback' => 'absint' ] );
 
         // --- Sección: Conexión al API ---
         add_settings_section(
@@ -196,8 +197,7 @@ class DFC_Settings {
             <?php if ( $active_tab === 'api' ) : ?>
                 <form method="post" action="options.php">
                     <?php
-                    settings_fields( 'dfc_settings_api' );
-                    settings_fields( 'dfc_settings_behavior' );
+                    settings_fields( 'dfc_settings' );
                     do_settings_sections( 'dale-facturas' );
                     submit_button( __( 'Guardar cambios', 'dale-facturas' ) );
                     ?>
