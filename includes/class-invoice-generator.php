@@ -251,10 +251,11 @@ class DFC_Invoice_Generator {
 
         // 7. Construir payload final (estructura compatible con api-facturas.php original)
         $order_number = (string) $order->get_order_number();
+        $macrobase_id = '1' . $order_number;
 
         $payload = [
             // Macrobase requiere "id" en ordenes[].
-            'id'           => $order_number,
+            'id'           => $macrobase_id,
             // Se mantiene por compatibilidad con implementaciones previas.
             'numeroOrden'  => $order_number,
             'clienteNombre' => $cliente['nombre'],
