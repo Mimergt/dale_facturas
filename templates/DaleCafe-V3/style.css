@@ -55,6 +55,10 @@ body {
     color: #5c4943;
 }
 
+.est-line {
+    padding: 0 25px;
+}
+
 .first-text,
 .second-text { color: #5c4943; }
 .product-cost { font-weight: 800; }

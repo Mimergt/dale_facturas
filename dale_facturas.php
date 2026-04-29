@@ -3,7 +3,7 @@
  * Plugin Name:       DaleCafe Facturas
  * Plugin URI:        https://github.com/Mimergt/dale_facturas
  * Description:       Integración de WooCommerce con el API de Macrobase para facturación electrónica FEL en Guatemala. Compatible con WooCommerce PDF Invoices & Packing Slips.
- * Version:           1.0.5
+ * Version:           1.0.6
  * Requires at least: 5.9
  * Requires PHP:      7.4
  * Author:            DaleCafe
@@ -19,7 +19,7 @@
 defined( 'ABSPATH' ) || exit;
 
 // Constantes del plugin
-define( 'DFC_VERSION',     '1.0.5' );
+define( 'DFC_VERSION',     '1.0.6' );
 define( 'DFC_PLUGIN_FILE', __FILE__ );
 define( 'DFC_PLUGIN_DIR',  plugin_dir_path( __FILE__ ) );
 define( 'DFC_PLUGIN_URL',  plugin_dir_url( __FILE__ ) );

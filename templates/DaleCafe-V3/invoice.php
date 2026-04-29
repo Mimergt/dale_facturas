@@ -85,7 +85,9 @@ if ( empty( $shop_address ) ) {
     $shop_address = trim( $empresa_ciudad_opt . ( ! empty( $empresa_depto_opt ) ? ', ' . $empresa_depto_opt : '' ) );
 }
 
-$header_fallback_logo = 'https://dalecafe.com/wp-content/uploads/2019/08/Asset-2.png';
+$header_fallback_logo = defined( 'DFC_PLUGIN_URL' )
+    ? DFC_PLUGIN_URL . 'templates/DaleCafe-V3/header.png'
+    : '';
 
 $certificador_nombre = $order->get_meta( '_dfc_fel_gface_empresa' );
 $certificador_nit    = $order->get_meta( '_dfc_fel_gface_nit' );
@@ -110,7 +112,11 @@ $certificador_nit    = $order->get_meta( '_dfc_fel_gface_nit' );
                 <?php if ( method_exists( $this, 'has_header_logo' ) && $this->has_header_logo() ) : ?>
                     <?php $this->header_logo(); ?>
                 <?php else : ?>
-                    <img src="<?php echo esc_url( $header_fallback_logo ); ?>" alt="DaleCafe" class="header-fallback-logo" />
+                    <?php if ( ! empty( $header_fallback_logo ) ) : ?>
+                        <img src="<?php echo esc_url( $header_fallback_logo ); ?>" alt="DaleCafe" class="header-fallback-logo" />
+                    <?php else : ?>
+                        <h1 class="shop-name"><?php echo esc_html( method_exists( $this, 'get_title' ) ? $this->get_title() : 'DaleCafe' ); ?></h1>
+                    <?php endif; ?>
                 <?php endif; ?>
             </td>
             <td class="invoice-title-cell"></td>
@@ -210,12 +216,12 @@ $certificador_nit    = $order->get_meta( '_dfc_fel_gface_nit' );
 
         <div class="section-divider"></div>
 
-        <p class="info-line">
+        <p class="info-line est-line">
             <span class="first-text"><?php echo esc_html( $empresa_nombre ); ?> | <?php esc_html_e( 'Dirección:', 'dale-facturas' ); ?> <?php echo esc_html( $shop_address ); ?> | <?php esc_html_e( 'NIT:', 'dale-facturas' ); ?> <?php echo esc_html( $empresa_nit ); ?></span>
         </p>
 
-        <p class="info-line"><span class="first-text"><?php esc_html_e( 'Autorización FEL:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $fel_firma ? $fel_firma : 'N/A' ); ?></span></p>
-        <p class="info-line"><span class="first-text"><?php esc_html_e( 'Certificador:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $certificador_nombre ? $certificador_nombre : 'N/A' ); ?> | <?php esc_html_e( 'NIT:', 'dale-facturas' ); ?> <?php echo esc_html( $certificador_nit ? $certificador_nit : 'N/A' ); ?></span></p>
+        <p class="info-line est-line"><span class="first-text"><?php esc_html_e( 'Autorización FEL:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $fel_firma ? $fel_firma : 'N/A' ); ?></span></p>
+        <p class="info-line est-line"><span class="first-text"><?php esc_html_e( 'Certificador:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $certificador_nombre ? $certificador_nombre : 'N/A' ); ?> | <?php esc_html_e( 'NIT:', 'dale-facturas' ); ?> <?php echo esc_html( $certificador_nit ? $certificador_nit : 'N/A' ); ?></span></p>
 
         <?php if ( $fel_firma ) : ?>
             <div class="firma-section">
