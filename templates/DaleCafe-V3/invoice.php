@@ -32,7 +32,7 @@ $order_id = $order->get_id();
 // Leer datos FEL certificados desde order meta
 $fel_serie          = $order->get_meta( '_dfc_fel_serie' );
 $fel_transaccion    = $order->get_meta( '_dfc_fel_transaccion' );
-$fel_firma          = $order->get_meta( '_dfc_fel_firma_electronica' );
+$fel_firma          = $order->get_meta( '_dfc_fel_firma' );
 $fel_numero_acceso  = $order->get_meta( '_dfc_fel_numero_acceso' );
 $fel_fecha_cert     = $order->get_meta( '_dfc_fel_fecha_certificacion' );
 $fel_es_contingencia = (bool) $order->get_meta( '_dfc_fel_es_contingencia' );
@@ -54,6 +54,15 @@ $billing_address  = $order->get_billing_address_1();
 
 // Número de pedido
 $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_number() : $order_id;
+$order_items  = method_exists( $this, 'get_order_items' ) ? $this->get_order_items() : array();
+$totals       = method_exists( $this, 'get_totals' ) ? $this->get_totals() : array();
+
+if ( ! is_array( $order_items ) ) {
+    $order_items = array();
+}
+if ( ! is_array( $totals ) ) {
+    $totals = array();
+}
 ?>
 <!DOCTYPE html>
 <html <?php language_attributes(); ?>>
@@ -199,25 +208,27 @@ $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_
             </tr>
         </thead>
         <tbody>
-            <?php foreach ( $this->get_order_items() as $item_id => $item ) : ?>
+            <?php foreach ( $order_items as $item_id => $item ) : ?>
                 <tr class="<?php echo esc_attr( apply_filters( 'wpo_wcpdf_item_row_class', $item_id, $document_type, $order, $item_id ) ); ?>">
                     <td class="col-product">
-                        <?php echo wp_kses_post( $item['name'] ); ?>
+                        <?php echo wp_kses_post( isset( $item['name'] ) ? $item['name'] : '' ); ?>
                         <?php do_action( 'wpo_wcpdf_before_item_meta', $document_type, $item, $order ); ?>
-                        <?php $this->item_meta( $item ); ?>
+                        <?php if ( isset( $item['meta'] ) ) : ?>
+                            <?php echo wp_kses_post( $item['meta'] ); ?>
+                        <?php endif; ?>
                         <?php do_action( 'wpo_wcpdf_after_item_meta', $document_type, $item, $order ); ?>
                     </td>
-                    <td class="col-qty"><?php echo esc_html( $item['quantity'] ); ?></td>
-                    <td class="col-price"><?php $this->single_item_price( $item ); ?></td>
-                    <td class="col-total"><?php $this->item_price( $item ); ?></td>
+                    <td class="col-qty"><?php echo esc_html( isset( $item['quantity'] ) ? $item['quantity'] : '' ); ?></td>
+                    <td class="col-price"><?php echo wp_kses_post( isset( $item['single_price'] ) ? $item['single_price'] : ( isset( $item['price'] ) ? $item['price'] : '' ) ); ?></td>
+                    <td class="col-total"><?php echo wp_kses_post( isset( $item['line_total'] ) ? $item['line_total'] : ( isset( $item['total'] ) ? $item['total'] : '' ) ); ?></td>
                 </tr>
             <?php endforeach; ?>
         </tbody>
         <tfoot>
-            <?php foreach ( $this->get_totals() as $key => $total ) : ?>
+            <?php foreach ( $totals as $key => $total ) : ?>
                 <tr class="<?php echo esc_attr( $key ); ?>">
-                    <td colspan="3" class="col-label"><?php echo wp_kses_post( $total['label'] ); ?></td>
-                    <td class="col-total"><?php echo wp_kses_post( $total['value'] ); ?></td>
+                    <td colspan="3" class="col-label"><?php echo wp_kses_post( isset( $total['label'] ) ? $total['label'] : '' ); ?></td>
+                    <td class="col-total"><?php echo wp_kses_post( isset( $total['value'] ) ? $total['value'] : '' ); ?></td>
                 </tr>
             <?php endforeach; ?>
         </tfoot>
@@ -299,7 +310,11 @@ $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_
 ====================================================================== -->
 <div id="invoice-footer">
     <?php do_action( 'wpo_wcpdf_before_footer', $document_type, $order ); ?>
-    <div class="footer-text"><?php $this->footer(); ?></div>
+    <div class="footer-text">
+        <?php if ( method_exists( $this, 'get_footer' ) ? $this->get_footer() : true ) : ?>
+            <?php $this->footer(); ?>
+        <?php endif; ?>
+    </div>
     <?php do_action( 'wpo_wcpdf_after_footer', $document_type, $order ); ?>
 </div>
 
