@@ -85,9 +85,7 @@ if ( empty( $shop_address ) ) {
     $shop_address = trim( $empresa_ciudad_opt . ( ! empty( $empresa_depto_opt ) ? ', ' . $empresa_depto_opt : '' ) );
 }
 
-$header_fallback_logo = defined( 'DFC_PLUGIN_URL' )
-    ? DFC_PLUGIN_URL . 'templates/DaleCafe-V3/header.png'
-    : '';
+$header_fallback_logo = 'https://dalecafe.com/wp-content/uploads/2019/08/Asset-2.png';
 
 $certificador_nombre = $order->get_meta( '_dfc_fel_gface_empresa' );
 $certificador_nit    = $order->get_meta( '_dfc_fel_gface_nit' );
@@ -109,15 +107,7 @@ $certificador_nit    = $order->get_meta( '_dfc_fel_gface_nit' );
     <table class="header-table">
         <tr>
             <td class="logo-cell">
-                <?php if ( method_exists( $this, 'has_header_logo' ) && $this->has_header_logo() ) : ?>
-                    <?php $this->header_logo(); ?>
-                <?php else : ?>
-                    <?php if ( ! empty( $header_fallback_logo ) ) : ?>
-                        <img src="<?php echo esc_url( $header_fallback_logo ); ?>" alt="DaleCafe" class="header-fallback-logo" />
-                    <?php else : ?>
-                        <h1 class="shop-name"><?php echo esc_html( method_exists( $this, 'get_title' ) ? $this->get_title() : 'DaleCafe' ); ?></h1>
-                    <?php endif; ?>
-                <?php endif; ?>
+                <img src="<?php echo esc_url( $header_fallback_logo ); ?>" alt="DaleCafe" class="header-fallback-logo" />
             </td>
             <td class="invoice-title-cell"></td>
         </tr>
