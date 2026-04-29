@@ -134,6 +134,17 @@ class DFC_Macrobase_API {
             $factura = $json['facturas'][0];
         }
 
+        // Errores de negocio pueden venir en facturas[0].error con HTTP 200.
+        if ( ! empty( $factura['error'] ) ) {
+            $codigo = $factura['codigo'] ?? '';
+            $error_msg = (string) $factura['error'];
+            if ( ! empty( $codigo ) ) {
+                $error_msg = sprintf( '[%s] %s', $codigo, $error_msg );
+            }
+
+            return new WP_Error( 'dfc_api_business_error', $error_msg );
+        }
+
         // Validar estructura de respuesta
         // En modo principal: debe tener serie, transaccion, firmaElectronica
         // En modo contingencia: serie, transaccion, sin firma
