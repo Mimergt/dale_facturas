@@ -175,7 +175,8 @@ class DFC_Invoice_Generator {
                 }
 
                 $quantity = $item->get_quantity();
-                $item_total = (float) $item->get_subtotal();
+                // Usar total neto del item para reflejar cupones/descuentos.
+                $item_total = (float) $item->get_total();
                 $price_unitario = $item_total / $quantity;
 
                 // Determinar pluPadre e identificar flags como Micro Lotes (líneas 221-298 api-facturas.php)
