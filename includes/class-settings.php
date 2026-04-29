@@ -424,7 +424,7 @@ class DFC_Settings {
 
     /**
      * Probar conexión al API de Macrobase.
-     * Envía un payload mínimo y verifica que la respuesta sea JSON válido.
+     * Ahora usa la clase DFC_Macrobase_API para encapsular la lógica.
      */
     public function ajax_test_api(): void {
         check_ajax_referer( 'dfc_test_api', 'nonce' );
@@ -433,48 +433,16 @@ class DFC_Settings {
             wp_send_json_error( [ 'message' => __( 'Sin permisos.', 'dale-facturas' ) ] );
         }
 
-        $url     = get_option( self::OPTION_API_URL, '' );
-        $usuario = get_option( self::OPTION_API_USUARIO, '' );
-        $clave   = get_option( self::OPTION_API_CLAVE, '' );
+        // Crear instancia del API client desde opciones guardadas
+        $api = DFC_Macrobase_API::from_options();
+        $result = $api->test_connection();
 
-        if ( empty( $url ) || empty( $usuario ) || empty( $clave ) ) {
-            wp_send_json_error( [ 'message' => __( 'Completa primero la URL, usuario y contraseña del API.', 'dale-facturas' ) ] );
-        }
-
-        $payload = [
-            'usuario' => $usuario,
-            'clave'   => $clave,
-            'ordenes' => [],
-        ];
-
-        $response = wp_remote_post( $url, [
-            'timeout' => 15,
-            'headers' => [ 'Content-Type' => 'application/json' ],
-            'body'    => wp_json_encode( $payload ),
-        ] );
-
-        if ( is_wp_error( $response ) ) {
-            wp_send_json_error( [ 'message' => $response->get_error_message() ] );
-        }
-
-        $code = wp_remote_retrieve_response_code( $response );
-        $body = wp_remote_retrieve_body( $response );
-        $json = json_decode( $body, true );
-
-        if ( $json === null ) {
-            wp_send_json_error( [
-                'message' => sprintf(
-                    __( 'El API respondió con HTTP %d pero no es JSON válido.', 'dale-facturas' ),
-                    $code
-                ),
-            ] );
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( [ 'message' => $result->get_error_message() ] );
         }
 
         wp_send_json_success( [
-            'message' => sprintf(
-                __( 'Conexión exitosa (HTTP %d). El API respondió correctamente.', 'dale-facturas' ),
-                $code
-            ),
+            'message' => __( 'Conexión exitosa (HTTP 200). El API respondió correctamente.', 'dale-facturas' ),
         ] );
     }
 
