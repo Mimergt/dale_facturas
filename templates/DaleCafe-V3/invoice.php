@@ -215,7 +215,7 @@ $establecimiento_info = array_filter( array(
                     <?php do_action( 'wpo_wcpdf_before_billing_address', $document_type, $order ); ?>
                     <p class="info-line"><span class="first-text"><?php esc_html_e( 'Nombre:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $cliente_nombre_factura ); ?></span></p>
                     <p class="info-line"><span class="first-text"><?php esc_html_e( 'Dirección:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $cliente_direccion_factura ); ?></span></p>
-                    <p class="info-line"><span class="first-text"><?php esc_html_e( 'NIT:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $billing_nit ); ?><?php if ( $billing_nitname ) : ?> - <?php echo esc_html( $billing_nitname ); ?><?php endif; ?></span></p>
+                    <p class="info-line"><span class="first-text"><?php esc_html_e( 'NIT:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $billing_nit ); ?></span></p>
                     <?php do_action( 'wpo_wcpdf_after_billing_address', $document_type, $order ); ?>
                 </td>
                 <td>
