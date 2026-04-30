@@ -44,6 +44,8 @@ $fel_resolucion_fecha = $order->get_meta( '_dfc_fel_resolucion_fecha' );
 
 $api_response_meta = $order->get_meta( '_dfc_api_response' );
 $api_response      = is_string( $api_response_meta ) ? json_decode( $api_response_meta, true ) : array();
+$api_request_meta  = $order->get_meta( '_dfc_api_request' );
+$api_request       = is_string( $api_request_meta ) ? json_decode( $api_request_meta, true ) : array();
 $respuesta_completa = array();
 
 if ( is_array( $api_response ) ) {
@@ -110,6 +112,22 @@ $billing_phone    = $order->get_billing_phone();
 $shipping_address = trim( $order->get_shipping_address_1() . ' ' . $order->get_shipping_address_2() . ' ' . $order->get_shipping_city() . ', ' . $order->get_shipping_state() );
 $billing_address  = $order->get_billing_address_1();
 $client_address   = ! empty( $shipping_address ) ? $shipping_address : $billing_address;
+
+$cliente_nombre_api = ! empty( $factura_respuesta['facturarA'] )
+    ? trim( (string) $factura_respuesta['facturarA'] )
+    : '';
+$cliente_direccion_api = ! empty( $factura_respuesta['direccion'] )
+    ? trim( (string) $factura_respuesta['direccion'] )
+    : '';
+$cliente_nombre_request = is_array( $api_request ) && ! empty( $api_request['clienteNombre'] )
+    ? trim( (string) $api_request['clienteNombre'] )
+    : '';
+$cliente_direccion_request = is_array( $api_request ) && ! empty( $api_request['clienteDireccion2'] )
+    ? trim( (string) $api_request['clienteDireccion2'] )
+    : '';
+
+$cliente_nombre_factura = $cliente_nombre_api ? $cliente_nombre_api : ( $cliente_nombre_request ? $cliente_nombre_request : $billing_name );
+$cliente_direccion_factura = $cliente_direccion_api ? $cliente_direccion_api : ( $cliente_direccion_request ? $cliente_direccion_request : $client_address );
 
 // Número de pedido
 $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_number() : $order_id;
@@ -201,8 +219,8 @@ $establecimiento_info = array_filter( array(
             <tr>
                 <td>
                     <?php do_action( 'wpo_wcpdf_before_billing_address', $document_type, $order ); ?>
-                    <p class="info-line"><span class="first-text"><?php esc_html_e( 'Nombre:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $billing_name ); ?></span></p>
-                    <p class="info-line"><span class="first-text"><?php esc_html_e( 'Dirección:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $client_address ); ?></span></p>
+                    <p class="info-line"><span class="first-text"><?php esc_html_e( 'Nombre:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $cliente_nombre_factura ); ?></span></p>
+                    <p class="info-line"><span class="first-text"><?php esc_html_e( 'Dirección:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $cliente_direccion_factura ); ?></span></p>
                     <p class="info-line"><span class="first-text"><?php esc_html_e( 'NIT:', 'dale-facturas' ); ?></span> <span class="second-text"><?php echo esc_html( $billing_nit ); ?><?php if ( $billing_nitname ) : ?> - <?php echo esc_html( $billing_nitname ); ?><?php endif; ?></span></p>
                     <?php do_action( 'wpo_wcpdf_after_billing_address', $document_type, $order ); ?>
                 </td>

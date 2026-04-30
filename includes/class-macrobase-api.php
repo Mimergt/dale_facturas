@@ -14,6 +14,11 @@ class DFC_Macrobase_API {
     private const LOG_SOURCE = 'dale-facturas';
 
     /**
+     * Endpoint para obtener nombre y direccion por NIT/CUI.
+     */
+    private const NIT_LOOKUP_URL = 'https://macroapps.sistemasmb.com/apiOci/web/app.php/api/gface/getnit';
+
+    /**
      * URL del API de Macrobase.
      */
     private string $api_url;
@@ -164,6 +169,71 @@ class DFC_Macrobase_API {
             'numeroFel'           => $factura['numeroFel'] ?? '',
             'factura'             => $factura,
             'respuesta_completa'  => $json,
+        ];
+    }
+
+    /**
+     * Consultar datos de contribuyente por NIT/CUI.
+     *
+     * Si la consulta falla o no devuelve datos utiles, retorna array vacio
+     * para que el flujo continue con los datos actuales del pedido.
+     *
+     * @param string $nit NIT/CUI a consultar.
+     *
+     * @return array Array con nombre_ordenado, direccion y nit; o array vacio.
+     */
+    public function consultar_nit( string $nit ): array {
+        $nit = trim( $nit );
+        if ( '' === $nit ) {
+            return [];
+        }
+
+        $payload = [ 'nit' => $nit ];
+
+        if ( get_option( DFC_Settings::OPTION_DEBUG_MODE ) ) {
+            $this->log_debug( 'NIT_LOOKUP_REQUEST', $payload );
+        }
+
+        $response = wp_remote_post( self::NIT_LOOKUP_URL, [
+            'timeout' => 15,
+            'headers' => [ 'Content-Type' => 'application/json' ],
+            'body'    => wp_json_encode( $payload ),
+        ] );
+
+        if ( is_wp_error( $response ) ) {
+            if ( get_option( DFC_Settings::OPTION_DEBUG_MODE ) ) {
+                $this->log_debug( 'NIT_LOOKUP_ERROR', $response->get_error_message() );
+            }
+            return [];
+        }
+
+        $http_code = wp_remote_retrieve_response_code( $response );
+        $body      = wp_remote_retrieve_body( $response );
+        $json      = json_decode( $body, true );
+
+        if ( get_option( DFC_Settings::OPTION_DEBUG_MODE ) ) {
+            $this->log_debug( 'NIT_LOOKUP_RESPONSE', [
+                'http_code' => $http_code,
+                'body'      => $json,
+            ] );
+        }
+
+        if ( $http_code >= 400 || ! is_array( $json ) || ! empty( $json['error'] ) ) {
+            return [];
+        }
+
+        $nombre_ordenado = isset( $json['nombre_ordenado'] ) ? trim( (string) $json['nombre_ordenado'] ) : '';
+        $direccion       = isset( $json['direccion'] ) ? trim( (string) $json['direccion'] ) : '';
+        $nit_respuesta   = isset( $json['nit'] ) ? trim( (string) $json['nit'] ) : $nit;
+
+        if ( '' === $nombre_ordenado && '' === $direccion ) {
+            return [];
+        }
+
+        return [
+            'nombre_ordenado' => $nombre_ordenado,
+            'direccion'       => $direccion,
+            'nit'             => $nit_respuesta,
         ];
     }
 

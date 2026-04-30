@@ -247,10 +247,26 @@ class DFC_Invoice_Generator {
             'departamento' => $order->get_billing_state() ?? 'Guatemala',
         ];
 
-        // 6. Construir formasPago basado en el método de pago
+        // 6. Intentar enriquecer nombre/direccion desde consulta NIT.
+        $api = DFC_Macrobase_API::from_options();
+        $nit_lookup = $api->consultar_nit( (string) $nit );
+
+        $cliente_nombre_factura = ! empty( $nit_lookup['nombre_ordenado'] )
+            ? $nit_lookup['nombre_ordenado']
+            : $cliente['nombre'];
+
+        $cliente_direccion_factura = ! empty( $nit_lookup['direccion'] )
+            ? $nit_lookup['direccion']
+            : trim( $cliente['direccion'] . ' ' . $cliente['direccion2'] . ' ' . $cliente['ciudad'] );
+
+        if ( ! empty( $nit_lookup['nit'] ) ) {
+            $nit = (string) $nit_lookup['nit'];
+        }
+
+        // 7. Construir formasPago basado en el método de pago
         $formas_pago = $this->build_formas_pago( $order, (float) $order->get_total() );
 
-        // 7. Construir payload final (estructura compatible con api-facturas.php original)
+        // 8. Construir payload final (estructura compatible con api-facturas.php original)
         $order_number = (string) $order->get_order_number();
         $macrobase_id = '1' . $order_number;
 
@@ -259,11 +275,11 @@ class DFC_Invoice_Generator {
             'id'           => $macrobase_id,
             // Se mantiene por compatibilidad con implementaciones previas.
             'numeroOrden'  => $order_number,
-            'clienteNombre' => $cliente['nombre'],
+            'clienteNombre' => $cliente_nombre_factura,
             'clienteTelefono' => $cliente['telefono'],
             'clienteEmail' => $cliente['email'],
             'clienteNIT'   => $nit,
-            'clienteDireccion2' => $cliente['direccion'] . ' ' . $cliente['direccion2'] . ' ' . $cliente['ciudad'],
+            'clienteDireccion2' => $cliente_direccion_factura,
             'clienteCiudad' => $cliente['ciudad'] ?? 'CIUDAD',
             'clienteDepartamen' => $cliente['departamento'],
             'formasPago'   => $formas_pago,
