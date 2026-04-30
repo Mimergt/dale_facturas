@@ -139,7 +139,7 @@ class DFC_Invoice_Generator {
         if ( $result['esContingencia'] ) {
             $msg .= ' [' . __( 'CONTINGENCIA', 'dale-facturas' ) . ']';
         }
-        $order->add_order_note( $msg, true );
+        $order->add_order_note( $msg, false );
 
         return true;
     }
