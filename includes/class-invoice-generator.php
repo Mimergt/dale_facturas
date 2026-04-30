@@ -255,9 +255,7 @@ class DFC_Invoice_Generator {
             ? $nit_lookup['nombre_ordenado']
             : $cliente['nombre'];
 
-        $cliente_direccion_factura = ! empty( $nit_lookup['direccion'] )
-            ? $nit_lookup['direccion']
-            : trim( $cliente['direccion'] . ' ' . $cliente['direccion2'] . ' ' . $cliente['ciudad'] );
+        $cliente_direccion_factura = trim( $cliente['direccion'] . ' ' . $cliente['direccion2'] . ' ' . $cliente['ciudad'] );
 
         if ( ! empty( $nit_lookup['nit'] ) ) {
             $nit = (string) $nit_lookup['nit'];

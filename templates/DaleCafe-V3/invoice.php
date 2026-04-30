@@ -116,18 +116,12 @@ $client_address   = ! empty( $shipping_address ) ? $shipping_address : $billing_
 $cliente_nombre_api = ! empty( $factura_respuesta['facturarA'] )
     ? trim( (string) $factura_respuesta['facturarA'] )
     : '';
-$cliente_direccion_api = ! empty( $factura_respuesta['direccion'] )
-    ? trim( (string) $factura_respuesta['direccion'] )
-    : '';
 $cliente_nombre_request = is_array( $api_request ) && ! empty( $api_request['clienteNombre'] )
     ? trim( (string) $api_request['clienteNombre'] )
     : '';
-$cliente_direccion_request = is_array( $api_request ) && ! empty( $api_request['clienteDireccion2'] )
-    ? trim( (string) $api_request['clienteDireccion2'] )
-    : '';
 
 $cliente_nombre_factura = $cliente_nombre_api ? $cliente_nombre_api : ( $cliente_nombre_request ? $cliente_nombre_request : $billing_name );
-$cliente_direccion_factura = $cliente_direccion_api ? $cliente_direccion_api : ( $cliente_direccion_request ? $cliente_direccion_request : $client_address );
+$cliente_direccion_factura = $client_address;
 
 // Número de pedido
 $order_number = method_exists( $order, 'get_order_number' ) ? $order->get_order_number() : $order_id;
