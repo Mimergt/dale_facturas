@@ -251,8 +251,17 @@ class DFC_Invoice_Generator {
         $api = DFC_Macrobase_API::from_options();
         $nit_lookup = $api->consultar_nit( (string) $nit );
 
-        $cliente_nombre_factura = ! empty( $nit_lookup['nombre_ordenado'] )
-            ? $nit_lookup['nombre_ordenado']
+        $nombre_ordenado = ! empty( $nit_lookup['nombre_ordenado'] )
+            ? trim( (string) $nit_lookup['nombre_ordenado'] )
+            : '';
+
+        // Nunca usar "Consumidor Final" como nombre en la factura.
+        if ( '' !== $nombre_ordenado && preg_match( '/consumidor\s+final/i', $nombre_ordenado ) ) {
+            $nombre_ordenado = '';
+        }
+
+        $cliente_nombre_factura = '' !== $nombre_ordenado
+            ? $nombre_ordenado
             : $cliente['nombre'];
 
         $cliente_direccion_factura = trim( $cliente['direccion'] . ' ' . $cliente['direccion2'] . ' ' . $cliente['ciudad'] );

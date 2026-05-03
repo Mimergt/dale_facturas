@@ -120,6 +120,13 @@ $cliente_nombre_request = is_array( $api_request ) && ! empty( $api_request['cli
     ? trim( (string) $api_request['clienteNombre'] )
     : '';
 
+if ( $cliente_nombre_api && preg_match( '/consumidor\s+final/i', $cliente_nombre_api ) ) {
+    $cliente_nombre_api = '';
+}
+if ( $cliente_nombre_request && preg_match( '/consumidor\s+final/i', $cliente_nombre_request ) ) {
+    $cliente_nombre_request = '';
+}
+
 $cliente_nombre_factura = $cliente_nombre_api ? $cliente_nombre_api : ( $cliente_nombre_request ? $cliente_nombre_request : $billing_name );
 $cliente_direccion_factura = $client_address;
 
