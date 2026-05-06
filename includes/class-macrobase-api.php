@@ -14,6 +14,12 @@ class DFC_Macrobase_API {
     private const LOG_SOURCE = 'dale-facturas';
 
     /**
+     * Reintentos para errores transitorios del API (deadlocks, locks, etc.).
+     */
+    private const MAX_INVOICE_RETRIES = 3;
+    private const RETRY_DELAY_MICROSECONDS = 500000;
+
+    /**
      * Endpoint para obtener nombre y direccion por NIT/CUI.
      */
     private const NIT_LOOKUP_URL = 'https://macroapps.sistemasmb.com/apiOci/web/app.php/api/gface/getnit';
@@ -93,88 +99,155 @@ class DFC_Macrobase_API {
             $this->log_debug( 'REQUEST', $payload );
         }
 
-        // Enviar petición
-        $response = wp_remote_post( $this->api_url, [
-            'timeout' => 30,
-            'headers' => [ 'Content-Type' => 'application/json' ],
-            'body'    => wp_json_encode( $payload ),
-        ] );
-
-        if ( is_wp_error( $response ) ) {
-            $this->log_debug( 'ERROR', $response->get_error_message() );
-            return $response;
-        }
-
-        $http_code = wp_remote_retrieve_response_code( $response );
-        $body      = wp_remote_retrieve_body( $response );
-        $json      = json_decode( $body, true );
-
-        // Log de response (si debug activo)
-        if ( get_option( DFC_Settings::OPTION_DEBUG_MODE ) ) {
-            $this->log_debug( 'RESPONSE', [
-                'http_code' => $http_code,
-                'body'      => $json,
+        for ( $attempt = 1; $attempt <= self::MAX_INVOICE_RETRIES; $attempt++ ) {
+            $response = wp_remote_post( $this->api_url, [
+                'timeout' => 30,
+                'headers' => [ 'Content-Type' => 'application/json' ],
+                'body'    => wp_json_encode( $payload ),
             ] );
-        }
 
-        // Validar respuesta
-        if ( ! is_array( $json ) ) {
-            return new WP_Error(
-                'dfc_api_invalid_response',
-                sprintf(
-                    __( 'El API respondió con HTTP %d pero no es JSON válido.', 'dale-facturas' ),
-                    $http_code
-                )
-            );
-        }
+            if ( is_wp_error( $response ) ) {
+                $message = $response->get_error_message();
+                $this->log_debug( 'ERROR', $message );
 
-        // HTTP error
-        if ( $http_code >= 400 ) {
-            $error_msg = $json['mensaje'] ?? $json['message'] ?? 'Error del API (HTTP ' . $http_code . ')';
-            return new WP_Error( 'dfc_api_http_error', $error_msg );
-        }
+                if ( $attempt < self::MAX_INVOICE_RETRIES && $this->is_retryable_api_error( $message ) ) {
+                    $this->log_retry_attempt( $attempt, $message );
+                    usleep( self::RETRY_DELAY_MICROSECONDS );
+                    continue;
+                }
 
-        $factura = $json;
-        if ( isset( $json['facturas'] ) && is_array( $json['facturas'] ) && ! empty( $json['facturas'][0] ) && is_array( $json['facturas'][0] ) ) {
-            $factura = $json['facturas'][0];
-        }
-
-        // Errores de negocio pueden venir en facturas[0].error con HTTP 200.
-        if ( ! empty( $factura['error'] ) ) {
-            $codigo = $factura['codigo'] ?? '';
-            $error_msg = (string) $factura['error'];
-            if ( ! empty( $codigo ) ) {
-                $error_msg = sprintf( '[%s] %s', $codigo, $error_msg );
+                return $response;
             }
 
-            return new WP_Error( 'dfc_api_business_error', $error_msg );
+            $http_code = wp_remote_retrieve_response_code( $response );
+            $body      = wp_remote_retrieve_body( $response );
+            $json      = json_decode( $body, true );
+
+            // Log de response (si debug activo)
+            if ( get_option( DFC_Settings::OPTION_DEBUG_MODE ) ) {
+                $this->log_debug( 'RESPONSE', [
+                    'http_code' => $http_code,
+                    'body'      => $json,
+                    'raw_body'  => ! is_array( $json ) ? $body : null,
+                ] );
+            }
+
+            if ( ! is_array( $json ) ) {
+                $message = trim( (string) $body );
+                if ( $attempt < self::MAX_INVOICE_RETRIES && $this->is_retryable_api_error( $message ) ) {
+                    $this->log_retry_attempt( $attempt, $message );
+                    usleep( self::RETRY_DELAY_MICROSECONDS );
+                    continue;
+                }
+
+                return new WP_Error(
+                    'dfc_api_invalid_response',
+                    sprintf(
+                        __( 'El API respondió con HTTP %d pero no es JSON válido.', 'dale-facturas' ),
+                        $http_code
+                    )
+                );
+            }
+
+            // HTTP error
+            if ( $http_code >= 400 ) {
+                $error_msg = $json['mensaje'] ?? $json['message'] ?? 'Error del API (HTTP ' . $http_code . ')';
+
+                if ( $attempt < self::MAX_INVOICE_RETRIES && $this->is_retryable_api_error( (string) $error_msg ) ) {
+                    $this->log_retry_attempt( $attempt, (string) $error_msg );
+                    usleep( self::RETRY_DELAY_MICROSECONDS );
+                    continue;
+                }
+
+                return new WP_Error( 'dfc_api_http_error', $error_msg );
+            }
+
+            $factura = $json;
+            if ( isset( $json['facturas'] ) && is_array( $json['facturas'] ) && ! empty( $json['facturas'][0] ) && is_array( $json['facturas'][0] ) ) {
+                $factura = $json['facturas'][0];
+            }
+
+            // Errores de negocio pueden venir en facturas[0].error con HTTP 200.
+            if ( ! empty( $factura['error'] ) ) {
+                $codigo = $factura['codigo'] ?? '';
+                $error_msg = (string) $factura['error'];
+                if ( ! empty( $codigo ) ) {
+                    $error_msg = sprintf( '[%s] %s', $codigo, $error_msg );
+                }
+
+                if ( $attempt < self::MAX_INVOICE_RETRIES && $this->is_retryable_api_error( $error_msg ) ) {
+                    $this->log_retry_attempt( $attempt, $error_msg );
+                    usleep( self::RETRY_DELAY_MICROSECONDS );
+                    continue;
+                }
+
+                return new WP_Error( 'dfc_api_business_error', $error_msg );
+            }
+
+            // Validar estructura de respuesta
+            if ( ! isset( $factura['serie'] ) || ! isset( $factura['transaccion'] ) ) {
+                return new WP_Error(
+                    'dfc_api_invalid_structure',
+                    __( 'La respuesta del API no tiene la estructura esperada (falta serie o transaccion).', 'dale-facturas' )
+                );
+            }
+
+            $es_contingencia = ! isset( $factura['firmaElectronica'] ) || empty( $factura['firmaElectronica'] );
+            if ( isset( $factura['esContingencia'] ) ) {
+                $es_contingencia = (bool) intval( $factura['esContingencia'] );
+            }
+
+            return [
+                'serie'               => $factura['serie'],
+                'transaccion'         => $factura['transaccion'],
+                'firmaElectronica'    => $factura['firmaElectronica'] ?? '',
+                'esContingencia'      => $es_contingencia,
+                'codigoFel'           => $factura['codigoFel'] ?? '',
+                'numeroFel'           => $factura['numeroFel'] ?? '',
+                'factura'             => $factura,
+                'respuesta_completa'  => $json,
+            ];
         }
 
-        // Validar estructura de respuesta
-        // En modo principal: debe tener serie, transaccion, firmaElectronica
-        // En modo contingencia: serie, transaccion, sin firma
-        if ( ! isset( $factura['serie'] ) || ! isset( $factura['transaccion'] ) ) {
-            return new WP_Error(
-                'dfc_api_invalid_structure',
-                __( 'La respuesta del API no tiene la estructura esperada (falta serie o transaccion).', 'dale-facturas' )
-            );
+        return new WP_Error(
+            'dfc_api_retry_exhausted',
+            __( 'No fue posible completar la facturación después de varios reintentos.', 'dale-facturas' )
+        );
+    }
+
+    /**
+     * Determina si un mensaje del API corresponde a un error transitorio reintentable.
+     *
+     * @param string $message Mensaje de error.
+     *
+     * @return bool
+     */
+    private function is_retryable_api_error( string $message ): bool {
+        if ( '' === trim( $message ) ) {
+            return false;
         }
 
-        $es_contingencia = ! isset( $factura['firmaElectronica'] ) || empty( $factura['firmaElectronica'] );
-        if ( isset( $factura['esContingencia'] ) ) {
-            $es_contingencia = (bool) intval( $factura['esContingencia'] );
+        return 1 === preg_match(
+            '/deadlock|serialization failure|try restarting transaction|lock wait timeout/i',
+            $message
+        );
+    }
+
+    /**
+     * Registrar un reintento automatico del API.
+     *
+     * @param int    $attempt Numero de intento actual.
+     * @param string $message Mensaje que motivo el reintento.
+     */
+    private function log_retry_attempt( int $attempt, string $message ): void {
+        if ( ! function_exists( 'wc_get_logger' ) ) {
+            return;
         }
 
-        return [
-            'serie'               => $factura['serie'],
-            'transaccion'         => $factura['transaccion'],
-            'firmaElectronica'    => $factura['firmaElectronica'] ?? '',
-            'esContingencia'      => $es_contingencia,
-            'codigoFel'           => $factura['codigoFel'] ?? '',
-            'numeroFel'           => $factura['numeroFel'] ?? '',
-            'factura'             => $factura,
-            'respuesta_completa'  => $json,
-        ];
+        wc_get_logger()->warning(
+            sprintf( '[RETRY %d/%d] Reintentando facturacion tras error transitorio: %s', $attempt, self::MAX_INVOICE_RETRIES, $message ),
+            [ 'source' => self::LOG_SOURCE ]
+        );
     }
 
     /**
