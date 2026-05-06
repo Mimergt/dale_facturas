@@ -9,14 +9,19 @@ defined( 'ABSPATH' ) || exit;
 class DFC_NIT_Handler {
 
     /**
-     * Meta key para NIT en el pedido (guardado por el tema DaleCafe).
+     * Meta key para NIT en el pedido (con guion).
      */
     const ORDER_NIT_META_KEY = '_billing_nit';
 
     /**
-     * Meta key para NIT en el cliente (si existe).
+     * Meta key alternativa para NIT en el pedido (sin guion).
      */
-    const USER_NIT_META_KEY = 'nit_number';
+    const ORDER_NIT_META_KEY_ALT = 'billing_nit';
+
+    /**
+     * Meta key para NIT en el cliente/usuario.
+     */
+    const USER_NIT_META_KEY = 'billing_nit';
 
     /**
      * NIT por defecto si no se especifica otro.
@@ -27,9 +32,10 @@ class DFC_NIT_Handler {
      * Obtener el NIT de un pedido.
      * Busca en este orden:
      * 1. Meta del pedido (_billing_nit)
-     * 2. Meta del cliente (nit_number)
-     * 3. Campo de facturación en el pedido
-     * 4. Default "CF"
+     * 2. Meta del pedido (billing_nit - sin guion)
+     * 3. Meta del cliente/usuario (billing_nit)
+     * 4. Meta de la suscripción si es renewal
+     * 5. Default "CF"
      *
      * @param WC_Order $order Pedido de WooCommerce.
      *
@@ -38,29 +44,43 @@ class DFC_NIT_Handler {
     public static function get_nit( WC_Order $order ): string {
         $nit = '';
 
-        // 1. Buscar en meta del pedido
+        // 1. Buscar en meta del pedido (_billing_nit con guion)
         $nit = $order->get_meta( self::ORDER_NIT_META_KEY );
-        if ( ! empty( $nit ) ) {
+        if ( ! empty( $nit ) && 'CF' !== strtoupper( $nit ) ) {
             return self::sanitize_nit( $nit );
         }
 
-        // 2. Buscar en meta del cliente
+        // 2. Buscar en meta del pedido (billing_nit sin guion)
+        $nit = $order->get_meta( self::ORDER_NIT_META_KEY_ALT );
+        if ( ! empty( $nit ) && 'CF' !== strtoupper( $nit ) ) {
+            return self::sanitize_nit( $nit );
+        }
+
+        // 3. Buscar en meta del cliente/usuario (billing_nit)
         $customer_id = $order->get_customer_id();
         if ( $customer_id > 0 ) {
             $nit = get_user_meta( $customer_id, self::USER_NIT_META_KEY, true );
-            if ( ! empty( $nit ) ) {
+            if ( ! empty( $nit ) && 'CF' !== strtoupper( $nit ) ) {
                 return self::sanitize_nit( $nit );
             }
         }
 
-        // 3. Buscar en campos de facturación (algunos temas lo guardan aquí)
-        $billing_nit = $order->get_billing_company();
-        if ( ! empty( $billing_nit ) && preg_match( '/\d/', $billing_nit ) ) {
-            // Si el campo de compañía contiene dígitos, podría ser NIT
-            return self::sanitize_nit( $billing_nit );
+        // 4. Buscar en meta de suscripción si es orden de renovación
+        $subscriptions = wcs_get_subscriptions_for_order( $order->get_id() );
+        if ( ! empty( $subscriptions ) ) {
+            foreach ( $subscriptions as $subscription ) {
+                $nit = $subscription->get_meta( self::ORDER_NIT_META_KEY );
+                if ( ! empty( $nit ) && 'CF' !== strtoupper( $nit ) ) {
+                    return self::sanitize_nit( $nit );
+                }
+                $nit = $subscription->get_meta( self::ORDER_NIT_META_KEY_ALT );
+                if ( ! empty( $nit ) && 'CF' !== strtoupper( $nit ) ) {
+                    return self::sanitize_nit( $nit );
+                }
+            }
         }
 
-        // 4. Retornar default
+        // 5. Retornar default
         return self::DEFAULT_NIT;
     }
 
