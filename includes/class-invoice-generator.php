@@ -499,6 +499,8 @@ class DFC_Invoice_Generator {
         $order->delete_meta_data( self::META_FEL_SERIE );
         $order->delete_meta_data( self::META_FEL_TRANSACCION );
         $order->delete_meta_data( self::META_FEL_FIRMA );
+        $order->delete_meta_data( self::META_FEL_CONTINGENCIA );
+        $order->delete_meta_data( self::META_API_RESPONSE );
         $order->save_meta_data();
 
         if ( function_exists( 'wc_get_logger' ) ) {
@@ -539,7 +541,9 @@ class DFC_Invoice_Generator {
         $order->delete_meta_data( self::META_FEL_SERIE );
         $order->delete_meta_data( self::META_FEL_TRANSACCION );
         $order->delete_meta_data( self::META_FEL_FIRMA );
+        $order->delete_meta_data( self::META_FEL_CONTINGENCIA );
         $order->delete_meta_data( self::META_FEL_ERROR );
+        $order->delete_meta_data( self::META_API_RESPONSE );
         $order->save_meta_data();
 
         // Generar
