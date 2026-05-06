@@ -160,11 +160,16 @@ class DFC_Macrobase_API {
             );
         }
 
+        $es_contingencia = ! isset( $factura['firmaElectronica'] ) || empty( $factura['firmaElectronica'] );
+        if ( isset( $factura['esContingencia'] ) ) {
+            $es_contingencia = (bool) intval( $factura['esContingencia'] );
+        }
+
         return [
             'serie'               => $factura['serie'],
             'transaccion'         => $factura['transaccion'],
             'firmaElectronica'    => $factura['firmaElectronica'] ?? '',
-            'esContingencia'      => ! isset( $factura['firmaElectronica'] ) || empty( $factura['firmaElectronica'] ),
+            'esContingencia'      => $es_contingencia,
             'codigoFel'           => $factura['codigoFel'] ?? '',
             'numeroFel'           => $factura['numeroFel'] ?? '',
             'factura'             => $factura,
