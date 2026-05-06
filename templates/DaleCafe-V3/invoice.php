@@ -29,6 +29,27 @@ if ( ! $order instanceof WC_Abstract_Order ) {
 
 $order_id = $order->get_id();
 
+// Cuando el PDF se genera desde admin-ajax.php?action=generate_wpo_wcpdf,
+// este template puede abrirse antes de que exista la FEL. En ese caso,
+// intentamos crearla aqui mismo para evitar PDFs en blanco.
+$wpo_action = isset( $_GET['action'] ) ? sanitize_key( wp_unslash( $_GET['action'] ) ) : '';
+if (
+    'invoice' === $document_type
+    && 'generate_wpo_wcpdf' === $wpo_action
+    && empty( $order->get_meta( '_dfc_fel_serie' ) )
+    && class_exists( 'DFC_Invoice_Generator' )
+) {
+    $invoice_generator = new DFC_Invoice_Generator();
+    $generation_result = $invoice_generator->generate_invoice( $order );
+
+    if ( ! is_wp_error( $generation_result ) ) {
+        $reloaded_order = wc_get_order( $order_id );
+        if ( $reloaded_order instanceof WC_Abstract_Order ) {
+            $order = $reloaded_order;
+        }
+    }
+}
+
 // Leer datos FEL certificados desde order meta
 $fel_serie          = $order->get_meta( '_dfc_fel_serie' );
 $fel_transaccion    = $order->get_meta( '_dfc_fel_transaccion' );
