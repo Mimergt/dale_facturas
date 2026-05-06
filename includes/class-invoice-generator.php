@@ -10,6 +10,11 @@ defined( 'ABSPATH' ) || exit;
 class DFC_Invoice_Generator {
 
     /**
+     * Cantidad maxima de intentos para obtener factura firmada (no contingencia).
+     */
+    private const MAX_SIGNED_ATTEMPTS = 3;
+
+    /**
      * Meta keys para guardar respuesta FEL del API.
      */
     const META_FEL_SERIE       = '_dfc_fel_serie';
@@ -80,11 +85,36 @@ class DFC_Invoice_Generator {
 
         // 2. Crear cliente API y enviar
         $api = DFC_Macrobase_API::from_options();
-        $result = $api->enviar_factura( $payload );
+        $result = null;
+        for ( $attempt = 1; $attempt <= self::MAX_SIGNED_ATTEMPTS; $attempt++ ) {
+            $current_result = $api->enviar_factura( $payload );
 
-        if ( is_wp_error( $result ) ) {
-            $this->save_error( $order, $result->get_error_message() );
-            return $result;
+            if ( is_wp_error( $current_result ) ) {
+                $this->save_error( $order, $current_result->get_error_message() );
+                return $current_result;
+            }
+
+            $result = $current_result;
+
+            if ( ! $this->is_contingency_result( $current_result ) ) {
+                break;
+            }
+
+            if ( function_exists( 'wc_get_logger' ) ) {
+                wc_get_logger()->warning(
+                    sprintf( 'Pedido %d: intento %d devolvio contingencia, reintentando para obtener firma.', $order->get_id(), $attempt ),
+                    [ 'source' => 'dale-facturas' ]
+                );
+            }
+        }
+
+        if ( ! is_array( $result ) || $this->is_contingency_result( $result ) ) {
+            $error = new WP_Error(
+                'dfc_contingency_not_allowed',
+                __( 'No fue posible obtener factura firmada; el API devolvió contingencia. Reintenta en unos minutos.', 'dale-facturas' )
+            );
+            $this->save_error( $order, $error->get_error_message() );
+            return $error;
         }
 
         $factura = isset( $result['factura'] ) && is_array( $result['factura'] ) ? $result['factura'] : [];
@@ -136,12 +166,23 @@ class DFC_Invoice_Generator {
             $result['serie'],
             $result['transaccion']
         );
-        if ( $result['esContingencia'] ) {
-            $msg .= ' [' . __( 'CONTINGENCIA', 'dale-facturas' ) . ']';
-        }
         $order->add_order_note( $msg, false );
 
         return true;
+    }
+
+    /**
+     * Determina si el resultado devuelto por el API corresponde a contingencia.
+     *
+     * @param array $result Resultado de DFC_Macrobase_API::enviar_factura().
+     *
+     * @return bool
+     */
+    private function is_contingency_result( array $result ): bool {
+        $flag_contingencia = ! empty( $result['esContingencia'] );
+        $firma = isset( $result['firmaElectronica'] ) ? trim( (string) $result['firmaElectronica'] ) : '';
+
+        return $flag_contingencia || '' === $firma;
     }
 
     /**
