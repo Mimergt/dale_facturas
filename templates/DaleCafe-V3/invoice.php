@@ -126,7 +126,7 @@ $certificador_nit = ! empty( $factura_respuesta['gfaceNit'] )
 $fel_certificado = ! empty( $fel_serie ) && ! empty( $fel_transaccion );
 
 // Datos del cliente
-$billing_nit      = $order->get_meta( '_billing_nit' ) ?: $order->get_meta( 'billing_nit' ) ?: 'CF';
+$billing_nit      = class_exists( 'DFC_NIT_Handler' ) ? DFC_NIT_Handler::get_nit( $order ) : ( $order->get_meta( '_billing_nit' ) ?: $order->get_meta( 'billing_nit' ) ?: 'CF' );
 $billing_nitname  = $order->get_meta( '_billing_nitname' ) ?: $order->get_meta( 'billing_nitname' ) ?: '';
 $billing_name     = trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );
 $billing_email    = $order->get_billing_email();

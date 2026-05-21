@@ -25,6 +25,8 @@ class DFC_Invoice_Generator {
     const META_API_REQUEST     = '_dfc_api_request';
     const META_API_RESPONSE    = '_dfc_api_response';
     const META_FEL_TIMESTAMP   = '_dfc_fel_timestamp';
+    const META_PREBUILT_SOURCE_ORDER = '_dfc_prebuilt_invoice_source_order';
+    const META_PREBUILT_READY_AT     = '_dfc_prebuilt_invoice_ready_at';
 
     /**
      * Registrar hooks.
@@ -35,6 +37,9 @@ class DFC_Invoice_Generator {
 
         // AJAX: Regenerar factura manualmente desde admin
         add_action( 'wp_ajax_dfc_regenerate_invoice', [ $this, 'ajax_regenerate_invoice' ] );
+
+        // Copiar FEL preparada de suscripcion al pedido de renovacion cuando se crea.
+        add_filter( 'wcs_renewal_order_created', [ $this, 'copy_prebuilt_fel_to_renewal_order' ], 10, 2 );
     }
 
     /**
@@ -43,13 +48,18 @@ class DFC_Invoice_Generator {
      * @param int $order_id ID del pedido.
      */
     public function on_order_completed( int $order_id ): void {
-        // Verificar si la facturación automática está habilitada
-        if ( ! get_option( DFC_Settings::OPTION_AUTO_INVOICE ) ) {
+        $order = wc_get_order( $order_id );
+        if ( ! $order ) {
             return;
         }
 
-        $order = wc_get_order( $order_id );
-        if ( ! $order ) {
+        // Si existe factura preparada desde suscripcion, copiarla y evitar nueva certificacion.
+        if ( $this->maybe_apply_prebuilt_subscription_invoice( $order ) ) {
+            return;
+        }
+
+        // Verificar si la facturación automática está habilitada
+        if ( ! get_option( DFC_Settings::OPTION_AUTO_INVOICE ) ) {
             return;
         }
 
@@ -62,6 +72,208 @@ class DFC_Invoice_Generator {
 
         // Generar factura
         $this->generate_invoice( $order );
+    }
+
+    /**
+     * Procesar factura anticipada para una suscripcion.
+     * Genera FEL sobre el pedido padre y deja referencia para aplicarla al pedido de renovacion.
+     *
+     * @return array|WP_Error
+     */
+    public function process_subscription_preinvoice( int $subscription_id ) {
+        if ( ! function_exists( 'wcs_get_subscription' ) ) {
+            return new WP_Error(
+                'dfc_subscriptions_missing',
+                __( 'WooCommerce Subscriptions no está activo.', 'dale-facturas' )
+            );
+        }
+
+        $subscription = wcs_get_subscription( $subscription_id );
+        if ( ! $subscription ) {
+            return new WP_Error(
+                'dfc_subscription_not_found',
+                __( 'Suscripción no encontrada.', 'dale-facturas' )
+            );
+        }
+
+        $parent_order_id = absint( $subscription->get_parent_id() );
+        if ( ! $parent_order_id ) {
+            return new WP_Error(
+                'dfc_subscription_parent_missing',
+                __( 'La suscripción no tiene pedido padre para usar como base.', 'dale-facturas' )
+            );
+        }
+
+        $source_order = wc_get_order( $parent_order_id );
+        if ( ! $source_order ) {
+            return new WP_Error(
+                'dfc_source_order_not_found',
+                __( 'No se pudo cargar el pedido base de la suscripción.', 'dale-facturas' )
+            );
+        }
+
+        if ( ! $source_order->get_meta( self::META_FEL_SERIE ) ) {
+            $result = $this->generate_invoice( $source_order );
+            if ( is_wp_error( $result ) ) {
+                return $result;
+            }
+        }
+
+        $subscription->update_meta_data( self::META_PREBUILT_SOURCE_ORDER, $source_order->get_id() );
+        $subscription->update_meta_data( self::META_PREBUILT_READY_AT, time() );
+        $subscription->save_meta_data();
+
+        $subscription->add_order_note(
+            sprintf(
+                __( 'Factura anticipada preparada usando pedido base #%d.', 'dale-facturas' ),
+                $source_order->get_id()
+            )
+        );
+
+        return [
+            'source_order_id' => $source_order->get_id(),
+            'serie'           => (string) $source_order->get_meta( self::META_FEL_SERIE ),
+            'transaccion'     => (string) $source_order->get_meta( self::META_FEL_TRANSACCION ),
+        ];
+    }
+
+    /**
+     * Hook de Subscriptions: al crear renewal order, intenta aplicar FEL preconstruida.
+     *
+     * @param WC_Order $renewal_order Renewal order recien creado.
+     * @param WC_Order $subscription  Suscripcion asociada.
+     *
+     * @return WC_Order
+     */
+    public function copy_prebuilt_fel_to_renewal_order( $renewal_order, $subscription ) {
+        if ( ! $renewal_order instanceof WC_Order || ! $subscription instanceof WC_Order ) {
+            return $renewal_order;
+        }
+
+        $source_order_id = absint( $subscription->get_meta( self::META_PREBUILT_SOURCE_ORDER ) );
+        if ( ! $source_order_id ) {
+            return $renewal_order;
+        }
+
+        $source_order = wc_get_order( $source_order_id );
+        if ( ! $source_order ) {
+            return $renewal_order;
+        }
+
+        if ( ! $source_order->get_meta( self::META_FEL_SERIE ) ) {
+            return $renewal_order;
+        }
+
+        if ( $renewal_order->get_meta( self::META_FEL_SERIE ) ) {
+            return $renewal_order;
+        }
+
+        $this->copy_fel_meta( $source_order, $renewal_order );
+
+        $renewal_order->add_order_note(
+            sprintf(
+                __( 'Se aplicó factura anticipada desde pedido base #%d.', 'dale-facturas' ),
+                $source_order->get_id()
+            ),
+            false
+        );
+
+        return $renewal_order;
+    }
+
+    /**
+     * Intentar aplicar una factura preconstruida de suscripcion al pedido recibido.
+     */
+    private function maybe_apply_prebuilt_subscription_invoice( WC_Order $order ): bool {
+        foreach ( $this->get_related_subscriptions_for_order( $order ) as $subscription ) {
+            $source_order_id = absint( $subscription->get_meta( self::META_PREBUILT_SOURCE_ORDER ) );
+            if ( ! $source_order_id ) {
+                continue;
+            }
+
+            $source_order = wc_get_order( $source_order_id );
+            if ( ! $source_order || ! $source_order->get_meta( self::META_FEL_SERIE ) ) {
+                continue;
+            }
+
+            $this->copy_fel_meta( $source_order, $order );
+            $order->add_order_note(
+                sprintf(
+                    __( 'Factura anticipada aplicada desde pedido base #%d.', 'dale-facturas' ),
+                    $source_order->get_id()
+                ),
+                false
+            );
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Copiar metadatos FEL relevantes desde un pedido origen hacia uno destino.
+     */
+    private function copy_fel_meta( WC_Order $source_order, WC_Order $target_order ): void {
+        $meta_keys = [
+            self::META_FEL_SERIE,
+            self::META_FEL_TRANSACCION,
+            self::META_FEL_FIRMA,
+            self::META_FEL_CONTINGENCIA,
+            self::META_FEL_TIMESTAMP,
+            self::META_API_REQUEST,
+            self::META_API_RESPONSE,
+            '_dfc_fel_fecha_certificacion',
+            '_dfc_fel_numero_acceso',
+            '_dfc_fel_nit_empresa',
+            '_dfc_fel_nombre_empresa',
+            '_dfc_fel_establecimiento_nombre',
+            '_dfc_fel_resolucion_numero',
+            '_dfc_fel_resolucion_fecha',
+            '_dfc_fel_gface_empresa',
+            '_dfc_fel_gface_nit',
+        ];
+
+        foreach ( $meta_keys as $meta_key ) {
+            $value = $source_order->get_meta( $meta_key );
+            if ( '' === $value || null === $value ) {
+                continue;
+            }
+            $target_order->update_meta_data( $meta_key, $value );
+        }
+
+        // Compatibilidad con flujo antiguo del theme (PDF por attachment preasignado).
+        $legacy_attachment_id = $source_order->get_meta( '_invoice_created_by_button' );
+        if ( ! empty( $legacy_attachment_id ) ) {
+            $target_order->update_meta_data( '_invoice_created_by_button', $legacy_attachment_id );
+        }
+
+        $target_order->delete_meta_data( self::META_FEL_ERROR );
+        $target_order->save_meta_data();
+    }
+
+    /**
+     * Obtener suscripciones relacionadas con un pedido.
+     *
+     * @return array<int,WC_Order>
+     */
+    private function get_related_subscriptions_for_order( WC_Order $order ): array {
+        $subscriptions = [];
+
+        if ( function_exists( 'wcs_get_subscriptions_for_order' ) ) {
+            $subscriptions = wcs_get_subscriptions_for_order( $order->get_id() );
+        }
+
+        if ( empty( $subscriptions ) ) {
+            $subscription_id = absint( $order->get_meta( '_subscription_renewal' ) );
+            if ( $subscription_id && function_exists( 'wcs_get_subscription' ) ) {
+                $subscription = wcs_get_subscription( $subscription_id );
+                if ( $subscription ) {
+                    $subscriptions = [ $subscription_id => $subscription ];
+                }
+            }
+        }
+
+        return is_array( $subscriptions ) ? $subscriptions : [];
     }
 
     /**

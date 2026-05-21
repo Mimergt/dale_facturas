@@ -13,6 +13,69 @@ class DFC_Admin {
     public function register_hooks(): void {
         add_action( 'woocommerce_order_details_after_order_table', [ $this, 'display_fel_meta' ], 10, 1 );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_order_edit_assets' ] );
+        add_action( 'add_meta_boxes', [ $this, 'register_subscription_meta_box' ] );
+        add_action( 'wp_ajax_dfc_process_subscription_invoice', [ $this, 'ajax_process_subscription_invoice' ] );
+    }
+
+    /**
+     * Registrar metabox de facturacion en suscripciones.
+     */
+    public function register_subscription_meta_box(): void {
+        add_meta_box(
+            'dfc-create-renewal-invoices',
+            __( 'Facturación de Suscripción', 'dale-facturas' ),
+            [ $this, 'render_subscription_meta_box' ],
+            'shop_subscription',
+            'side',
+            'default'
+        );
+    }
+
+    /**
+     * Render del metabox para preparar factura antes de crear pedido de renovacion.
+     */
+    public function render_subscription_meta_box( WP_Post $post ): void {
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            return;
+        }
+
+        $subscription = function_exists( 'wcs_get_subscription' ) ? wcs_get_subscription( $post->ID ) : null;
+        $parent_order_id = $subscription ? absint( $subscription->get_parent_id() ) : 0;
+        $source_order_id = $subscription ? absint( $subscription->get_meta( DFC_Invoice_Generator::META_PREBUILT_SOURCE_ORDER ) ) : 0;
+        $ready_at = $subscription ? (int) $subscription->get_meta( DFC_Invoice_Generator::META_PREBUILT_READY_AT ) : 0;
+
+        wp_nonce_field( 'dfc_process_subscription_invoice', 'dfc_subscription_invoice_nonce' );
+        ?>
+        <p>
+            <?php esc_html_e( 'Prepara la factura FEL antes de que exista el pedido de renovación y la asigna automáticamente cuando se cree.', 'dale-facturas' ); ?>
+        </p>
+
+        <?php if ( $parent_order_id ) : ?>
+            <p>
+                <strong><?php esc_html_e( 'Pedido base:', 'dale-facturas' ); ?></strong>
+                #<?php echo esc_html( (string) $parent_order_id ); ?>
+            </p>
+        <?php endif; ?>
+
+        <?php if ( $source_order_id ) : ?>
+            <p>
+                <strong><?php esc_html_e( 'Factura anticipada lista desde pedido:', 'dale-facturas' ); ?></strong>
+                #<?php echo esc_html( (string) $source_order_id ); ?>
+            </p>
+            <?php if ( $ready_at > 0 ) : ?>
+                <p>
+                    <em><?php echo esc_html( gmdate( 'Y-m-d H:i:s', $ready_at ) . ' UTC' ); ?></em>
+                </p>
+            <?php endif; ?>
+        <?php endif; ?>
+
+        <p>
+            <button type="button" class="button button-secondary" id="dfc-process-subscription-invoice" data-subscription-id="<?php echo esc_attr( (string) $post->ID ); ?>">
+                <?php esc_html_e( 'Procesar Factura', 'dale-facturas' ); ?>
+            </button>
+            <span id="dfc-process-subscription-result" style="display:block; margin-top:8px;"></span>
+        </p>
+        <?php
     }
 
     /**
@@ -99,26 +162,81 @@ class DFC_Admin {
             return;
         }
 
-        // Verificar que sea un pedido de WooCommerce
-        if ( ! isset( $_GET['post'] ) || get_post_type( $_GET['post'] ) !== 'shop_order' ) {
+        if ( ! isset( $_GET['post'] ) ) {
             return;
         }
 
-        wp_enqueue_script(
-            'dfc-order-edit',
-            DFC_PLUGIN_URL . 'assets/js/order-edit.js',
-            [ 'jquery' ],
-            DFC_VERSION,
-            true
-        );
+        $post_id   = absint( $_GET['post'] );
+        $post_type = get_post_type( $post_id );
 
-        wp_localize_script( 'dfc-order-edit', 'dfcOrderEdit', [
-            'ajaxUrl' => admin_url( 'admin-ajax.php' ),
-            'i18n'    => [
-                'regenerating' => __( 'Regenerando...', 'dale-facturas' ),
-                'success'      => __( 'Éxito', 'dale-facturas' ),
-                'error'        => __( 'Error', 'dale-facturas' ),
-            ],
+        if ( 'shop_order' === $post_type ) {
+            wp_enqueue_script(
+                'dfc-order-edit',
+                DFC_PLUGIN_URL . 'assets/js/order-edit.js',
+                [ 'jquery' ],
+                DFC_VERSION,
+                true
+            );
+
+            wp_localize_script( 'dfc-order-edit', 'dfcOrderEdit', [
+                'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+                'i18n'    => [
+                    'regenerating' => __( 'Regenerando...', 'dale-facturas' ),
+                    'success'      => __( 'Éxito', 'dale-facturas' ),
+                    'error'        => __( 'Error', 'dale-facturas' ),
+                ],
+            ] );
+        }
+
+        if ( 'shop_subscription' === $post_type ) {
+            wp_enqueue_script(
+                'dfc-subscription-edit',
+                DFC_PLUGIN_URL . 'assets/js/subscription-edit.js',
+                [ 'jquery' ],
+                DFC_VERSION,
+                true
+            );
+
+            wp_localize_script( 'dfc-subscription-edit', 'dfcSubscriptionEdit', [
+                'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+                'i18n'    => [
+                    'processing' => __( 'Procesando...', 'dale-facturas' ),
+                    'success'    => __( 'Éxito', 'dale-facturas' ),
+                    'error'      => __( 'Error', 'dale-facturas' ),
+                ],
+            ] );
+        }
+    }
+
+    /**
+     * AJAX: preparar factura anticipada para suscripcion.
+     */
+    public function ajax_process_subscription_invoice(): void {
+        check_ajax_referer( 'dfc_process_subscription_invoice', 'nonce' );
+
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( [ 'message' => __( 'Sin permisos.', 'dale-facturas' ) ] );
+        }
+
+        $subscription_id = isset( $_POST['subscription_id'] ) ? absint( $_POST['subscription_id'] ) : 0;
+        if ( ! $subscription_id ) {
+            wp_send_json_error( [ 'message' => __( 'ID de suscripción inválido.', 'dale-facturas' ) ] );
+        }
+
+        $invoice_generator = new DFC_Invoice_Generator();
+        $result = $invoice_generator->process_subscription_preinvoice( $subscription_id );
+
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( [ 'message' => $result->get_error_message() ] );
+        }
+
+        wp_send_json_success( [
+            'message' => sprintf(
+                __( 'Factura anticipada lista. Serie %1$s, transacción %2$s (pedido base #%3$d).', 'dale-facturas' ),
+                $result['serie'] ?: '-',
+                $result['transaccion'] ?: '-',
+                $result['source_order_id'] ?: 0
+            ),
         ] );
     }
 }
