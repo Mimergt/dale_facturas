@@ -156,7 +156,7 @@ class DFC_Invoice_Generator {
         $subscription->update_meta_data( self::META_PREBUILT_READY_AT, time() );
         $subscription->save_meta_data();
 
-        $attachment_id = $this->ensure_prebuilt_pdf_attachment( $source_order );
+        $attachment_id = $this->ensure_prebuilt_pdf_attachment( $source_order, $subscription );
         if ( $attachment_id > 0 ) {
             $subscription->update_meta_data( self::META_PREBUILT_ATTACHMENT_ID, $attachment_id );
             $subscription->save_meta_data();
@@ -371,7 +371,7 @@ class DFC_Invoice_Generator {
     /**
      * Genera y guarda (si hace falta) el PDF preconstruido como attachment.
      */
-    private function ensure_prebuilt_pdf_attachment( WC_Order $source_order ): int {
+    private function ensure_prebuilt_pdf_attachment( WC_Order $source_order, ?WC_Order $template_order = null ): int {
         $existing_attachment_id = absint( $source_order->get_meta( '_invoice_created_by_button' ) );
         if ( $existing_attachment_id > 0 ) {
             return $existing_attachment_id;
@@ -383,13 +383,37 @@ class DFC_Invoice_Generator {
         }
 
         try {
-            $pdf_binary = $this->get_pdf_binary_from_order( $source_order->get_id() );
+            $pdf_binary = '';
+
+            // En flujo de suscripción, priorizar ghost order clonado de la suscripción (paridad con theme legacy).
+            if ( $template_order instanceof WC_Order ) {
+                $ghost_order_id = $this->create_pdf_ghost_order_from_template( $template_order, $source_order, 'subscription-template' );
+                if ( $ghost_order_id > 0 ) {
+                    try {
+                        $ghost_order = wc_get_order( $ghost_order_id );
+                        if ( $ghost_order ) {
+                            $this->copy_fel_meta( $source_order, $ghost_order );
+                        }
+                        $pdf_binary = $this->get_pdf_binary_from_order( $ghost_order_id );
+                    } finally {
+                        wp_delete_post( $ghost_order_id, true );
+                    }
+                }
+            }
+
+            if ( '' === $pdf_binary ) {
+                $pdf_binary = $this->get_pdf_binary_from_order( $source_order->get_id() );
+            }
 
             if ( '' === $pdf_binary ) {
                 $this->log_info( sprintf( 'Pedido #%d: PDF directo no válido, intentando pedido fantasma para preinvoice.', $source_order->get_id() ) );
-                $ghost_order_id = $this->create_pdf_ghost_order( $source_order );
+                $ghost_order_id = $this->create_pdf_ghost_order_from_template( $source_order, $source_order, 'source-order-fallback' );
                 if ( $ghost_order_id > 0 ) {
                     try {
+                        $ghost_order = wc_get_order( $ghost_order_id );
+                        if ( $ghost_order ) {
+                            $this->copy_fel_meta( $source_order, $ghost_order );
+                        }
                         $pdf_binary = $this->get_pdf_binary_from_order( $ghost_order_id );
                     } finally {
                         wp_delete_post( $ghost_order_id, true );
@@ -462,10 +486,10 @@ class DFC_Invoice_Generator {
     /**
      * Crea una copia temporal del pedido para generar PDF, emulando el flujo legacy del theme.
      */
-    private function create_pdf_ghost_order( WC_Order $source_order ): int {
+    private function create_pdf_ghost_order_from_template( WC_Order $template_order, WC_Order $source_order, string $reason = 'template' ): int {
         $ghost_order = wc_create_order(
             [
-                'status'      => 'wc-processing',
+                'status'      => 'wc-pending',
                 'customer_id' => absint( $source_order->get_customer_id() ),
             ]
         );
@@ -475,16 +499,17 @@ class DFC_Invoice_Generator {
         }
 
         $ghost_order->set_created_via( 'dfc-preinvoice-ghost' );
-        $ghost_order->set_currency( $source_order->get_currency() );
-        $ghost_order->set_prices_include_tax( $source_order->get_prices_include_tax() );
-        $ghost_order->set_payment_method( $source_order->get_payment_method() );
-        $ghost_order->set_payment_method_title( $source_order->get_payment_method_title() );
-        $ghost_order->set_customer_note( $source_order->get_customer_note() );
-        $ghost_order->set_address( $source_order->get_address( 'billing' ), 'billing' );
-        $ghost_order->set_address( $source_order->get_address( 'shipping' ), 'shipping' );
+        $ghost_order->set_currency( $template_order->get_currency() ?: $source_order->get_currency() );
+        $ghost_order->set_prices_include_tax( $template_order->get_prices_include_tax() );
+        $ghost_order->set_payment_method( $template_order->get_payment_method() ?: $source_order->get_payment_method() );
+        $ghost_order->set_payment_method_title( $template_order->get_payment_method_title() ?: $source_order->get_payment_method_title() );
+        $ghost_order->set_customer_note( $template_order->get_customer_note() );
+        $ghost_order->set_address( $template_order->get_address( 'billing' ) ?: $source_order->get_address( 'billing' ), 'billing' );
+        $ghost_order->set_address( $template_order->get_address( 'shipping' ) ?: $source_order->get_address( 'shipping' ), 'shipping' );
         $ghost_order->update_meta_data( '_dfc_preinvoice_ghost_from', $source_order->get_id() );
+        $ghost_order->update_meta_data( '_dfc_preinvoice_ghost_reason', $reason );
 
-        foreach ( $source_order->get_items( 'line_item' ) as $item ) {
+        foreach ( $template_order->get_items( 'line_item' ) as $item ) {
             $new_item = new WC_Order_Item_Product();
             $new_item->set_props(
                 [
@@ -508,7 +533,7 @@ class DFC_Invoice_Generator {
             $ghost_order->add_item( $new_item );
         }
 
-        foreach ( $source_order->get_items( 'shipping' ) as $item ) {
+        foreach ( $template_order->get_items( 'shipping' ) as $item ) {
             $new_item = new WC_Order_Item_Shipping();
             $new_item->set_props(
                 [
@@ -527,7 +552,7 @@ class DFC_Invoice_Generator {
             $ghost_order->add_item( $new_item );
         }
 
-        foreach ( $source_order->get_items( 'fee' ) as $item ) {
+        foreach ( $template_order->get_items( 'fee' ) as $item ) {
             $new_item = new WC_Order_Item_Fee();
             $new_item->set_props(
                 [
@@ -547,7 +572,7 @@ class DFC_Invoice_Generator {
             $ghost_order->add_item( $new_item );
         }
 
-        foreach ( $source_order->get_items( 'coupon' ) as $item ) {
+        foreach ( $template_order->get_items( 'coupon' ) as $item ) {
             $new_item = new WC_Order_Item_Coupon();
             $new_item->set_props(
                 [
@@ -559,17 +584,17 @@ class DFC_Invoice_Generator {
             $ghost_order->add_item( $new_item );
         }
 
-        $ghost_order->set_shipping_total( (float) $source_order->get_shipping_total() );
-        $ghost_order->set_discount_total( (float) $source_order->get_discount_total() );
-        $ghost_order->set_discount_tax( (float) $source_order->get_discount_tax() );
-        $ghost_order->set_cart_tax( (float) $source_order->get_cart_tax() );
-        $ghost_order->set_shipping_tax( (float) $source_order->get_shipping_tax() );
-        $ghost_order->set_total_tax( (float) $source_order->get_total_tax() );
-        $ghost_order->set_total( (float) $source_order->get_total() );
+        $ghost_order->set_shipping_total( (float) $template_order->get_shipping_total() );
+        $ghost_order->set_discount_total( (float) $template_order->get_discount_total() );
+        $ghost_order->set_discount_tax( (float) $template_order->get_discount_tax() );
+        $ghost_order->set_cart_tax( (float) $template_order->get_cart_tax() );
+        $ghost_order->set_shipping_tax( (float) $template_order->get_shipping_tax() );
+        $ghost_order->set_total_tax( (float) $template_order->get_total_tax() );
+        $ghost_order->set_total( (float) $template_order->get_total() );
         $ghost_order->save();
 
         $ghost_order_id = $ghost_order->get_id();
-        $this->log_info( sprintf( 'Pedido #%d: ghost order #%d creado para generar PDF preinvoice.', $source_order->get_id(), $ghost_order_id ) );
+        $this->log_info( sprintf( 'Pedido #%d: ghost order #%d creado desde template #%d (%s) para generar PDF preinvoice.', $source_order->get_id(), $ghost_order_id, $template_order->get_id(), $reason ) );
 
         return $ghost_order_id;
     }
