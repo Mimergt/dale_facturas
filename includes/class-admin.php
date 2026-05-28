@@ -116,6 +116,24 @@ class DFC_Admin {
         $parent_order_id = $subscription ? absint( $subscription->get_parent_id() ) : 0;
         $source_order_id = $subscription ? absint( $subscription->get_meta( DFC_Invoice_Generator::META_PREBUILT_SOURCE_ORDER ) ) : 0;
         $ready_at = $subscription ? (int) $subscription->get_meta( DFC_Invoice_Generator::META_PREBUILT_READY_AT ) : 0;
+        $subscription_attachment_id = $subscription ? absint( $subscription->get_meta( DFC_Invoice_Generator::META_PREBUILT_ATTACHMENT_ID ) ) : 0;
+        $pdf_url = '';
+        $fallback_pdf_url = '';
+
+        if ( $source_order_id ) {
+            $source_order = wc_get_order( $source_order_id );
+            if ( $source_order ) {
+                $attachment_id = absint( $source_order->get_meta( '_invoice_created_by_button' ) );
+                if ( $attachment_id > 0 ) {
+                    $pdf_url = (string) wp_get_attachment_url( $attachment_id );
+                }
+                $fallback_pdf_url = admin_url( 'admin-ajax.php?action=generate_wpo_wcpdf&document_type=invoice&order_ids=' . $source_order_id );
+            }
+        }
+
+        if ( empty( $pdf_url ) && $subscription_attachment_id > 0 ) {
+            $pdf_url = (string) wp_get_attachment_url( $subscription_attachment_id );
+        }
 
         wp_nonce_field( 'dfc_process_subscription_invoice_v2', 'dfc_subscription_invoice_nonce_v2' );
         ?>
