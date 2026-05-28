@@ -328,4 +328,39 @@ class DFC_Product_Mapper {
     public function get_plu_map(): array {
         return $this->plu_map;
     }
+
+    /**
+     * Resolver PLU desde un valor de opción (legacy _tmcartepo_data).
+     *
+     * @param string $value Valor de opción (ej. blend o molienda).
+     *
+     * @return int|null
+     */
+    public function get_plu_from_option_value( string $value ): ?int {
+        $value = trim( $value );
+        if ( '' === $value ) {
+            return null;
+        }
+
+        $by_sku = $this->find_plu_by_sku( $value );
+        if ( $by_sku ) {
+            return $by_sku;
+        }
+
+        $by_grind = $this->find_plu_by_grind( $value );
+        if ( $by_grind ) {
+            return $by_grind;
+        }
+
+        $by_blend = $this->find_plu_by_blend( $value );
+        if ( $by_blend ) {
+            return $by_blend;
+        }
+
+        if ( ctype_digit( $value ) ) {
+            return (int) $value;
+        }
+
+        return null;
+    }
 }

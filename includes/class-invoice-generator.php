@@ -466,6 +466,63 @@ class DFC_Invoice_Generator {
 
                 // Evitar que productos contenedor de suscripción sin SKU bloqueen la certificación.
                 if ( '' === $sku && str_contains( strtolower( $product_type ), 'subscription' ) ) {
+                    $legacy_meta_items = $item->get_meta( '_tmcartepo_data', true );
+                    if ( is_array( $legacy_meta_items ) && ! empty( $legacy_meta_items ) ) {
+                        $this->log_info(
+                            sprintf(
+                                'Pedido #%d: item contenedor de suscripción %d sin SKU, usando _tmcartepo_data (%d entradas).',
+                                $order->get_id(),
+                                $item->get_id(),
+                                count( $legacy_meta_items )
+                            )
+                        );
+
+                        foreach ( $legacy_meta_items as $legacy_row ) {
+                            if ( ! is_array( $legacy_row ) ) {
+                                continue;
+                            }
+
+                            $legacy_name = isset( $legacy_row['name'] ) ? trim( (string) $legacy_row['name'] ) : '';
+                            $legacy_value = isset( $legacy_row['value'] ) ? trim( (string) $legacy_row['value'] ) : '';
+                            $legacy_qty = isset( $legacy_row['quantity'] ) ? (int) $legacy_row['quantity'] : 1;
+                            $legacy_price = isset( $legacy_row['price'] ) ? (float) $legacy_row['price'] : 0.0;
+
+                            // Compatibilidad con flujo legacy: ignorar filas de navegación no facturables.
+                            if ( 'Paso 3' === $legacy_name || '' === $legacy_value ) {
+                                continue;
+                            }
+
+                            $legacy_plu = $mapper->get_plu_from_option_value( $legacy_value );
+                            if ( null === $legacy_plu ) {
+                                $this->log_info(
+                                    sprintf(
+                                        'Pedido #%d: legacy row "%s"="%s" sin PLU mapeable, se omite.',
+                                        $order->get_id(),
+                                        $legacy_name,
+                                        $legacy_value
+                                    )
+                                );
+                                continue;
+                            }
+
+                            if ( $legacy_qty <= 0 ) {
+                                $legacy_qty = 1;
+                            }
+
+                            $legacy_unit_price = $legacy_price > 0 ? ( $legacy_price / $legacy_qty ) : 0;
+                            $items[] = [
+                                'plu'                      => $legacy_plu,
+                                'cantidad'                 => $legacy_qty,
+                                'precio'                   => $legacy_unit_price,
+                                'monto'                    => $legacy_price,
+                                'descuentoItemPorcentaje'  => 0,
+                                'comboNumero'              => 1,
+                                'pluPadre'                 => $legacy_plu,
+                            ];
+                            $subtotal += $legacy_price;
+                        }
+                    }
+
                     $this->log_info(
                         sprintf(
                             'Pedido #%d: se omite item contenedor de suscripción sin SKU (product_id=%d, item_id=%d).',
