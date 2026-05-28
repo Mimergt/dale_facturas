@@ -467,6 +467,8 @@ class DFC_Invoice_Generator {
                 // Evitar que productos contenedor de suscripción sin SKU bloqueen la certificación.
                 if ( '' === $sku && str_contains( strtolower( $product_type ), 'subscription' ) ) {
                     $legacy_meta_items = $item->get_meta( '_tmcartepo_data', true );
+                    $legacy_added_total = 0.0;
+                    $first_legacy_plu = null;
                     if ( is_array( $legacy_meta_items ) && ! empty( $legacy_meta_items ) ) {
                         $this->log_info(
                             sprintf(
@@ -505,6 +507,10 @@ class DFC_Invoice_Generator {
                                 continue;
                             }
 
+                            if ( null === $first_legacy_plu ) {
+                                $first_legacy_plu = $legacy_plu;
+                            }
+
                             if ( $legacy_qty <= 0 ) {
                                 $legacy_qty = 1;
                             }
@@ -520,7 +526,39 @@ class DFC_Invoice_Generator {
                                 'pluPadre'                 => $legacy_plu,
                             ];
                             $subtotal += $legacy_price;
+                            $legacy_added_total += $legacy_price;
                         }
+                    }
+
+                    // Comportamiento legacy: el item padre aporta monto cuando addons no cargan el total completo.
+                    if ( $item_total > 0 && $legacy_added_total < $item_total ) {
+                        $container_plu = (int) ( $first_legacy_plu ?? 1 );
+                        $container_qty = $item_qty > 0 ? $item_qty : 1;
+                        $container_monto = $item_total - $legacy_added_total;
+                        $container_precio = $container_monto / $container_qty;
+
+                        $items[] = [
+                            'plu'                      => $container_plu,
+                            'cantidad'                 => $container_qty,
+                            'precio'                   => $container_precio,
+                            'monto'                    => $container_monto,
+                            'descuentoItemPorcentaje'  => 0,
+                            'comboNumero'              => 1,
+                            'pluPadre'                 => $container_plu,
+                        ];
+                        $subtotal += $container_monto;
+
+                        $this->log_info(
+                            sprintf(
+                                'Pedido #%d: item contenedor %d agregó línea compensatoria monto=%s plu=%d (legacy_total=%s, item_total=%s).',
+                                $order->get_id(),
+                                $item->get_id(),
+                                (string) wc_format_decimal( $container_monto, 2 ),
+                                $container_plu,
+                                (string) wc_format_decimal( $legacy_added_total, 2 ),
+                                (string) wc_format_decimal( $item_total, 2 )
+                            )
+                        );
                     }
 
                     $this->log_info(

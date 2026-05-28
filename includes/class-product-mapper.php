@@ -177,8 +177,9 @@ class DFC_Product_Mapper {
      * @return int|null PLU si encontrado, null en caso contrario.
      */
     private function find_plu_by_sku( string $sku ): ?int {
+        $needle = $this->normalize_lookup_value( $sku );
         foreach ( $this->plu_map as $entry ) {
-            if ( $entry['type'] === 'sku' && strtolower( $entry['sku'] ) === strtolower( $sku ) ) {
+            if ( $entry['type'] === 'sku' && $this->normalize_lookup_value( (string) $entry['sku'] ) === $needle ) {
                 return (int) $entry['plu'];
             }
         }
@@ -193,8 +194,9 @@ class DFC_Product_Mapper {
      * @return int|null PLU si encontrado, null en caso contrario.
      */
     private function find_plu_by_grind( string $grind ): ?int {
+        $needle = $this->normalize_lookup_value( $grind );
         foreach ( $this->plu_map as $entry ) {
-            if ( $entry['type'] === 'grind' && strtolower( $entry['sku'] ) === strtolower( $grind ) ) {
+            if ( $entry['type'] === 'grind' && $this->normalize_lookup_value( (string) $entry['sku'] ) === $needle ) {
                 return (int) $entry['plu'];
             }
         }
@@ -209,8 +211,9 @@ class DFC_Product_Mapper {
      * @return int|null PLU si encontrado, null en caso contrario.
      */
     private function find_plu_by_blend( string $blend ): ?int {
+        $needle = $this->normalize_lookup_value( $blend );
         foreach ( $this->plu_map as $entry ) {
-            if ( $entry['type'] === 'blend' && strtolower( $entry['sku'] ) === strtolower( $blend ) ) {
+            if ( $entry['type'] === 'blend' && $this->normalize_lookup_value( (string) $entry['sku'] ) === $needle ) {
                 return (int) $entry['plu'];
             }
         }
@@ -337,30 +340,58 @@ class DFC_Product_Mapper {
      * @return int|null
      */
     public function get_plu_from_option_value( string $value ): ?int {
-        $value = trim( $value );
+        $value = trim( html_entity_decode( wp_strip_all_tags( $value ), ENT_QUOTES, 'UTF-8' ) );
         if ( '' === $value ) {
             return null;
         }
 
-        $by_sku = $this->find_plu_by_sku( $value );
-        if ( $by_sku ) {
-            return $by_sku;
+        $candidates = [ $value ];
+
+        // Compatibilidad legacy: opciones con "<br/>Notas: ...".
+        if ( str_contains( $value, 'Notas:' ) ) {
+            $parts = explode( 'Notas:', $value, 2 );
+            $candidates[] = trim( $parts[0] );
+        }
+        if ( str_contains( $value, '|' ) ) {
+            $parts = explode( '|', $value, 2 );
+            $candidates[] = trim( $parts[0] );
         }
 
-        $by_grind = $this->find_plu_by_grind( $value );
-        if ( $by_grind ) {
-            return $by_grind;
-        }
+        foreach ( $candidates as $candidate ) {
+            if ( '' === $candidate ) {
+                continue;
+            }
 
-        $by_blend = $this->find_plu_by_blend( $value );
-        if ( $by_blend ) {
-            return $by_blend;
-        }
+            $by_sku = $this->find_plu_by_sku( $candidate );
+            if ( $by_sku ) {
+                return $by_sku;
+            }
 
-        if ( ctype_digit( $value ) ) {
-            return (int) $value;
+            $by_grind = $this->find_plu_by_grind( $candidate );
+            if ( $by_grind ) {
+                return $by_grind;
+            }
+
+            $by_blend = $this->find_plu_by_blend( $candidate );
+            if ( $by_blend ) {
+                return $by_blend;
+            }
+
+            if ( ctype_digit( $candidate ) ) {
+                return (int) $candidate;
+            }
         }
 
         return null;
+    }
+
+    /**
+     * Normaliza valores para comparación flexible en mapeos.
+     */
+    private function normalize_lookup_value( string $value ): string {
+        $normalized = html_entity_decode( wp_strip_all_tags( $value ), ENT_QUOTES, 'UTF-8' );
+        $normalized = str_replace( [ "\xE2\x80\x98", "\xE2\x80\x99", '´', '`' ], "'", $normalized );
+        $normalized = preg_replace( '/\s+/', ' ', $normalized );
+        return strtolower( trim( (string) $normalized ) );
     }
 }
