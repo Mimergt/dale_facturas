@@ -487,8 +487,8 @@ class DFC_Invoice_Generator {
                             $legacy_qty = isset( $legacy_row['quantity'] ) ? (int) $legacy_row['quantity'] : 1;
                             $legacy_price = isset( $legacy_row['price'] ) ? (float) $legacy_row['price'] : 0.0;
 
-                            // Compatibilidad con flujo legacy: ignorar filas de navegación no facturables.
-                            if ( 'Paso 3' === $legacy_name || '' === $legacy_value ) {
+                            // Compatibilidad con flujo legacy: sólo omitir filas completamente vacías.
+                            if ( '' === $legacy_value ) {
                                 continue;
                             }
 
@@ -649,7 +649,21 @@ class DFC_Invoice_Generator {
         }
 
         // 7. Construir formasPago basado en el método de pago
-        $formas_pago = $this->build_formas_pago( $order, (float) $order->get_total() );
+        $detalles_total = 0.0;
+        foreach ( $items as $detail ) {
+            $detalles_total += (float) ( $detail['monto'] ?? 0 );
+        }
+        $order_total = (float) $order->get_total();
+        $this->log_info(
+            sprintf(
+                'Pedido #%d: total detalles=%s vs total pedido=%s.',
+                $order->get_id(),
+                (string) wc_format_decimal( $detalles_total, 2 ),
+                (string) wc_format_decimal( $order_total, 2 )
+            )
+        );
+
+        $formas_pago = $this->build_formas_pago( $order, $order_total );
 
         // 8. Construir payload final (estructura compatible con api-facturas.php original)
         // Legacy theme: usa _wcj_order_number; si no existe, fallback a get_order_number().
