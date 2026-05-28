@@ -286,14 +286,24 @@ class DFC_Admin {
      * AJAX: preparar factura anticipada para suscripcion.
      */
     public function ajax_process_subscription_invoice(): void {
+        if ( function_exists( 'wc_get_logger' ) ) {
+            wc_get_logger()->info( 'AJAX dfc_process_subscription_invoice recibido.', [ 'source' => 'dale-facturas' ] );
+        }
+
         check_ajax_referer( 'dfc_process_subscription_invoice', 'nonce' );
 
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            if ( function_exists( 'wc_get_logger' ) ) {
+                wc_get_logger()->error( 'AJAX dfc_process_subscription_invoice sin permisos.', [ 'source' => 'dale-facturas' ] );
+            }
             wp_send_json_error( [ 'message' => __( 'Sin permisos.', 'dale-facturas' ) ] );
         }
 
         $subscription_id = isset( $_POST['subscription_id'] ) ? absint( $_POST['subscription_id'] ) : 0;
         if ( ! $subscription_id ) {
+            if ( function_exists( 'wc_get_logger' ) ) {
+                wc_get_logger()->error( 'AJAX dfc_process_subscription_invoice sin subscription_id válido.', [ 'source' => 'dale-facturas' ] );
+            }
             wp_send_json_error( [ 'message' => __( 'ID de suscripción inválido.', 'dale-facturas' ) ] );
         }
 
@@ -301,7 +311,20 @@ class DFC_Admin {
         $result = $invoice_generator->process_subscription_preinvoice( $subscription_id );
 
         if ( is_wp_error( $result ) ) {
+            if ( function_exists( 'wc_get_logger' ) ) {
+                wc_get_logger()->error(
+                    sprintf( 'AJAX dfc_process_subscription_invoice error suscripción #%d: %s', $subscription_id, $result->get_error_message() ),
+                    [ 'source' => 'dale-facturas' ]
+                );
+            }
             wp_send_json_error( [ 'message' => $result->get_error_message() ] );
+        }
+
+        if ( function_exists( 'wc_get_logger' ) ) {
+            wc_get_logger()->info(
+                sprintf( 'AJAX dfc_process_subscription_invoice OK suscripción #%d, source_order #%d.', $subscription_id, (int) $result['source_order_id'] ),
+                [ 'source' => 'dale-facturas' ]
+            );
         }
 
         wp_send_json_success( [
@@ -318,14 +341,24 @@ class DFC_Admin {
      * AJAX v2: preparar factura anticipada para suscripcion desde flujo nuevo aislado.
      */
     public function ajax_process_subscription_invoice_v2(): void {
+        if ( function_exists( 'wc_get_logger' ) ) {
+            wc_get_logger()->info( 'AJAX dfc_process_subscription_invoice_v2 recibido.', [ 'source' => 'dale-facturas' ] );
+        }
+
         check_ajax_referer( 'dfc_process_subscription_invoice_v2', 'nonce' );
 
         if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            if ( function_exists( 'wc_get_logger' ) ) {
+                wc_get_logger()->error( 'AJAX dfc_process_subscription_invoice_v2 sin permisos.', [ 'source' => 'dale-facturas' ] );
+            }
             wp_send_json_error( [ 'message' => __( 'Sin permisos.', 'dale-facturas' ) ] );
         }
 
         $subscription_id = isset( $_POST['subscription_id'] ) ? absint( $_POST['subscription_id'] ) : 0;
         if ( ! $subscription_id ) {
+            if ( function_exists( 'wc_get_logger' ) ) {
+                wc_get_logger()->error( 'AJAX dfc_process_subscription_invoice_v2 sin subscription_id válido.', [ 'source' => 'dale-facturas' ] );
+            }
             wp_send_json_error( [ 'message' => __( 'ID de suscripción inválido.', 'dale-facturas' ) ] );
         }
 
@@ -333,6 +366,12 @@ class DFC_Admin {
         $result = $invoice_generator->process_subscription_preinvoice( $subscription_id );
 
         if ( is_wp_error( $result ) ) {
+            if ( function_exists( 'wc_get_logger' ) ) {
+                wc_get_logger()->error(
+                    sprintf( 'AJAX dfc_process_subscription_invoice_v2 error suscripción #%d: %s', $subscription_id, $result->get_error_message() ),
+                    [ 'source' => 'dale-facturas' ]
+                );
+            }
             wp_send_json_error( [ 'message' => $result->get_error_message() ] );
         }
 

@@ -29,6 +29,8 @@ class DFC_Invoice_Generator {
     const META_PREBUILT_READY_AT     = '_dfc_prebuilt_invoice_ready_at';
     const META_PREBUILT_APPLIED_FROM = '_dfc_prebuilt_invoice_applied_from';
     const META_PREBUILT_APPLIED_AT   = '_dfc_prebuilt_invoice_applied_at';
+    const USER_META_PREBUILT_SOURCE_ORDER = '_dfc_prebuilt_invoice_source_order';
+    const USER_META_PREBUILT_READY_AT     = '_dfc_prebuilt_invoice_ready_at';
 
     /**
      * Registrar hooks.
@@ -39,9 +41,6 @@ class DFC_Invoice_Generator {
 
         // AJAX: Regenerar factura manualmente desde admin
         add_action( 'wp_ajax_dfc_regenerate_invoice', [ $this, 'ajax_regenerate_invoice' ] );
-
-        // Copiar FEL preparada de suscripcion al pedido de renovacion cuando se crea.
-        add_filter( 'wcs_renewal_order_created', [ $this, 'copy_prebuilt_fel_to_renewal_order' ], 10, 2 );
     }
 
     /**
@@ -55,13 +54,17 @@ class DFC_Invoice_Generator {
             return;
         }
 
+        $this->log_info( sprintf( 'on_order_completed iniciado para pedido #%d.', $order_id ) );
+
         // Si existe factura preparada desde suscripcion, copiarla y evitar nueva certificacion.
         if ( $this->maybe_apply_prebuilt_subscription_invoice( $order ) ) {
+            $this->log_info( sprintf( 'Pedido #%d reutilizó factura preconstruida. No se genera nueva.', $order_id ) );
             return;
         }
 
         // Verificar si la facturación automática está habilitada
         if ( ! get_option( DFC_Settings::OPTION_AUTO_INVOICE ) ) {
+            $this->log_info( sprintf( 'Pedido #%d: facturación automática deshabilitada.', $order_id ) );
             return;
         }
 
@@ -69,6 +72,7 @@ class DFC_Invoice_Generator {
         $existing_seria = $order->get_meta( self::META_FEL_SERIE );
         if ( ! empty( $existing_seria ) ) {
             // Ya fue facturada
+            $this->log_info( sprintf( 'Pedido #%d ya tiene FEL serie %s.', $order_id, (string) $existing_seria ) );
             return;
         }
 
@@ -114,9 +118,13 @@ class DFC_Invoice_Generator {
             );
         }
 
+        $this->log_info( sprintf( 'Preinvoice suscripción #%d usando pedido base #%d.', $subscription_id, $parent_order_id ) );
+
         if ( ! $source_order->get_meta( self::META_FEL_SERIE ) ) {
+            $this->log_info( sprintf( 'Pedido base #%d sin FEL previa. Generando factura.', $parent_order_id ) );
             $result = $this->generate_invoice( $source_order );
             if ( is_wp_error( $result ) ) {
+                $this->log_error( sprintf( 'Error generando preinvoice para suscripción #%d: %s', $subscription_id, $result->get_error_message() ) );
                 return $result;
             }
         }
@@ -124,6 +132,13 @@ class DFC_Invoice_Generator {
         $subscription->update_meta_data( self::META_PREBUILT_SOURCE_ORDER, $source_order->get_id() );
         $subscription->update_meta_data( self::META_PREBUILT_READY_AT, time() );
         $subscription->save_meta_data();
+
+        $customer_id = absint( $subscription->get_customer_id() );
+        if ( $customer_id > 0 ) {
+            update_user_meta( $customer_id, self::USER_META_PREBUILT_SOURCE_ORDER, $source_order->get_id() );
+            update_user_meta( $customer_id, self::USER_META_PREBUILT_READY_AT, time() );
+            $this->log_info( sprintf( 'Suscripción #%d guardó preinvoice en user_meta para user #%d, source_order #%d.', $subscription_id, $customer_id, $source_order->get_id() ) );
+        }
 
         $subscription->add_order_note(
             sprintf(
@@ -140,82 +155,79 @@ class DFC_Invoice_Generator {
     }
 
     /**
-     * Hook de Subscriptions: al crear renewal order, intenta aplicar FEL preconstruida.
-     *
-     * @param WC_Order $renewal_order Renewal order recien creado.
-     * @param WC_Order $subscription  Suscripcion asociada.
-     *
-     * @return WC_Order
+     * Intentar aplicar una factura preconstruida de suscripcion al pedido recibido.
      */
-    public function copy_prebuilt_fel_to_renewal_order( $renewal_order, $subscription ) {
-        if ( ! $renewal_order instanceof WC_Order || ! $subscription instanceof WC_Order ) {
-            return $renewal_order;
+    private function maybe_apply_prebuilt_subscription_invoice( WC_Order $order ): bool {
+        $order_id = $order->get_id();
+        $source_order_id = 0;
+
+        foreach ( $this->get_related_subscriptions_for_order( $order ) as $subscription ) {
+            $source_order_id = absint( $subscription->get_meta( self::META_PREBUILT_SOURCE_ORDER ) );
+            if ( $source_order_id ) {
+                $this->log_info( sprintf( 'Pedido #%d encontró source_order #%d desde suscripción #%d.', $order_id, $source_order_id, $subscription->get_id() ) );
+                break;
+            }
         }
 
-        $source_order_id = absint( $subscription->get_meta( self::META_PREBUILT_SOURCE_ORDER ) );
         if ( ! $source_order_id ) {
-            return $renewal_order;
+            $customer_id = absint( $order->get_customer_id() );
+            if ( $customer_id > 0 ) {
+                $source_order_id = absint( get_user_meta( $customer_id, self::USER_META_PREBUILT_SOURCE_ORDER, true ) );
+                if ( $source_order_id ) {
+                    $this->log_info( sprintf( 'Pedido #%d encontró source_order #%d desde user_meta user #%d.', $order_id, $source_order_id, $customer_id ) );
+                }
+            }
+        }
+
+        if ( ! $source_order_id ) {
+            $this->log_info( sprintf( 'Pedido #%d no tiene preinvoice disponible.', $order_id ) );
+            return false;
         }
 
         $source_order = wc_get_order( $source_order_id );
-        if ( ! $source_order ) {
-            return $renewal_order;
+        if ( ! $source_order || ! $source_order->get_meta( self::META_FEL_SERIE ) ) {
+            $this->log_error( sprintf( 'Pedido #%d tenía source_order #%d pero sin FEL válida.', $order_id, $source_order_id ) );
+            return false;
         }
 
-        if ( ! $source_order->get_meta( self::META_FEL_SERIE ) ) {
-            return $renewal_order;
+        $this->copy_fel_meta( $source_order, $order );
+        $order->update_meta_data( self::META_PREBUILT_APPLIED_FROM, $source_order->get_id() );
+        $order->update_meta_data( self::META_PREBUILT_APPLIED_AT, time() );
+        $order->save_meta_data();
+
+        $customer_id = absint( $order->get_customer_id() );
+        if ( $customer_id > 0 ) {
+            delete_user_meta( $customer_id, self::USER_META_PREBUILT_SOURCE_ORDER );
+            delete_user_meta( $customer_id, self::USER_META_PREBUILT_READY_AT );
         }
 
-        if ( $renewal_order->get_meta( self::META_FEL_SERIE ) ) {
-            return $renewal_order;
-        }
-
-        $this->copy_fel_meta( $source_order, $renewal_order );
-        $renewal_order->update_meta_data( self::META_PREBUILT_APPLIED_FROM, $source_order->get_id() );
-        $renewal_order->update_meta_data( self::META_PREBUILT_APPLIED_AT, time() );
-        $renewal_order->save_meta_data();
-
-        $renewal_order->add_order_note(
+        $order->add_order_note(
             sprintf(
-                __( 'Se aplicó factura anticipada desde pedido base #%d y quedó vinculada a esta renovación.', 'dale-facturas' ),
+                __( 'Factura anticipada aplicada desde pedido base #%d y reutilizada en este pedido de renovación.', 'dale-facturas' ),
                 $source_order->get_id()
             ),
             false
         );
-
-        return $renewal_order;
+        $this->log_info( sprintf( 'Pedido #%d reutilizó FEL desde source_order #%d.', $order_id, $source_order->get_id() ) );
+        return true;
     }
 
     /**
-     * Intentar aplicar una factura preconstruida de suscripcion al pedido recibido.
+     * Logging info con source consistente.
      */
-    private function maybe_apply_prebuilt_subscription_invoice( WC_Order $order ): bool {
-        foreach ( $this->get_related_subscriptions_for_order( $order ) as $subscription ) {
-            $source_order_id = absint( $subscription->get_meta( self::META_PREBUILT_SOURCE_ORDER ) );
-            if ( ! $source_order_id ) {
-                continue;
-            }
-
-            $source_order = wc_get_order( $source_order_id );
-            if ( ! $source_order || ! $source_order->get_meta( self::META_FEL_SERIE ) ) {
-                continue;
-            }
-
-            $this->copy_fel_meta( $source_order, $order );
-            $order->update_meta_data( self::META_PREBUILT_APPLIED_FROM, $source_order->get_id() );
-            $order->update_meta_data( self::META_PREBUILT_APPLIED_AT, time() );
-            $order->save_meta_data();
-            $order->add_order_note(
-                sprintf(
-                    __( 'Factura anticipada aplicada desde pedido base #%d y reutilizada en este pedido de renovación.', 'dale-facturas' ),
-                    $source_order->get_id()
-                ),
-                false
-            );
-            return true;
+    private function log_info( string $message ): void {
+        if ( function_exists( 'wc_get_logger' ) ) {
+            wc_get_logger()->info( $message, [ 'source' => 'dale-facturas' ] );
         }
+    }
 
-        return false;
+    /**
+     * Logging error con source consistente.
+     */
+    private function log_error( string $message ): void {
+        if ( function_exists( 'wc_get_logger' ) ) {
+            wc_get_logger()->error( $message, [ 'source' => 'dale-facturas' ] );
+        }
     }
 
     /**

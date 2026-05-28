@@ -35,8 +35,11 @@
                             .css('color', '#dc3232');
                     }
                 })
-                .fail(function () {
-                    $result.text(dfcSubscriptionEdit.i18n.error).css('color', '#dc3232');
+                .fail(function (jqXHR) {
+                    var raw = jqXHR && jqXHR.responseText ? String(jqXHR.responseText).replace(/\s+/g, ' ').slice(0, 180) : '';
+                    $result
+                        .text(dfcSubscriptionEdit.i18n.error + (raw ? ': ' + raw : ''))
+                        .css('color', '#dc3232');
                 })
                 .always(function () {
                     $btn.prop('disabled', false);
