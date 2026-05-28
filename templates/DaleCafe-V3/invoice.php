@@ -45,6 +45,9 @@ if (
     if ( ! is_wp_error( $generation_result ) ) {
         $reloaded_order = wc_get_order( $order_id );
         if ( $reloaded_order instanceof WC_Abstract_Order ) {
+            if ( method_exists( $reloaded_order, 'read_meta_data' ) ) {
+                $reloaded_order->read_meta_data( true );
+            }
             $order = $reloaded_order;
         }
     }

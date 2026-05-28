@@ -94,6 +94,8 @@ class DFC_Admin {
         $firma           = $order->get_meta( DFC_Invoice_Generator::META_FEL_FIRMA );
         $es_contingencia = $order->get_meta( DFC_Invoice_Generator::META_FEL_CONTINGENCIA );
         $error_msg       = $order->get_meta( DFC_Invoice_Generator::META_FEL_ERROR );
+        $prebuilt_from   = $order->get_meta( DFC_Invoice_Generator::META_PREBUILT_APPLIED_FROM );
+        $prebuilt_at     = (int) $order->get_meta( DFC_Invoice_Generator::META_PREBUILT_APPLIED_AT );
 
         // Si no hay FEL y tampoco error, no mostrar nada
         if ( empty( $serie ) && empty( $error_msg ) ) {
@@ -134,6 +136,18 @@ class DFC_Admin {
                             <td class="label" style="color: #dc3232;"><strong><?php esc_html_e( 'Estado:', 'dale-facturas' ); ?></strong></td>
                             <td class="total" style="color: #dc3232;"><strong><?php esc_html_e( 'CONTINGENCIA', 'dale-facturas' ); ?></strong></td>
                         </tr>
+                    <?php endif; ?>
+                    <?php if ( ! empty( $prebuilt_from ) ) : ?>
+                        <tr>
+                            <td class="label"><?php esc_html_e( 'Factura origen:', 'dale-facturas' ); ?></td>
+                            <td class="total">#<?php echo esc_html( (string) $prebuilt_from ); ?></td>
+                        </tr>
+                        <?php if ( $prebuilt_at > 0 ) : ?>
+                            <tr>
+                                <td class="label"><?php esc_html_e( 'Aplicada el:', 'dale-facturas' ); ?></td>
+                                <td class="total"><?php echo esc_html( gmdate( 'Y-m-d H:i:s', $prebuilt_at ) . ' UTC' ); ?></td>
+                            </tr>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </table>
             <?php endif; ?>

@@ -27,6 +27,8 @@ class DFC_Invoice_Generator {
     const META_FEL_TIMESTAMP   = '_dfc_fel_timestamp';
     const META_PREBUILT_SOURCE_ORDER = '_dfc_prebuilt_invoice_source_order';
     const META_PREBUILT_READY_AT     = '_dfc_prebuilt_invoice_ready_at';
+    const META_PREBUILT_APPLIED_FROM = '_dfc_prebuilt_invoice_applied_from';
+    const META_PREBUILT_APPLIED_AT   = '_dfc_prebuilt_invoice_applied_at';
 
     /**
      * Registrar hooks.
@@ -169,10 +171,13 @@ class DFC_Invoice_Generator {
         }
 
         $this->copy_fel_meta( $source_order, $renewal_order );
+        $renewal_order->update_meta_data( self::META_PREBUILT_APPLIED_FROM, $source_order->get_id() );
+        $renewal_order->update_meta_data( self::META_PREBUILT_APPLIED_AT, time() );
+        $renewal_order->save_meta_data();
 
         $renewal_order->add_order_note(
             sprintf(
-                __( 'Se aplicó factura anticipada desde pedido base #%d.', 'dale-facturas' ),
+                __( 'Se aplicó factura anticipada desde pedido base #%d y quedó vinculada a esta renovación.', 'dale-facturas' ),
                 $source_order->get_id()
             ),
             false
@@ -197,9 +202,12 @@ class DFC_Invoice_Generator {
             }
 
             $this->copy_fel_meta( $source_order, $order );
+            $order->update_meta_data( self::META_PREBUILT_APPLIED_FROM, $source_order->get_id() );
+            $order->update_meta_data( self::META_PREBUILT_APPLIED_AT, time() );
+            $order->save_meta_data();
             $order->add_order_note(
                 sprintf(
-                    __( 'Factura anticipada aplicada desde pedido base #%d.', 'dale-facturas' ),
+                    __( 'Factura anticipada aplicada desde pedido base #%d y reutilizada en este pedido de renovación.', 'dale-facturas' ),
                     $source_order->get_id()
                 ),
                 false
