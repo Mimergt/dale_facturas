@@ -514,6 +514,13 @@ class DFC_Invoice_Generator {
         $ghost_order->update_meta_data( '_dfc_preinvoice_ghost_from', $source_order->get_id() );
         $ghost_order->update_meta_data( '_dfc_preinvoice_ghost_reason', $reason );
 
+        foreach ( [ '_billing_nit', 'billing_nit', '_billing_nitname', 'billing_nitname', 'nit_number', '_nit_number', 'nit', '_nit', 'cliente_nit', '_cliente_nit' ] as $nit_meta_key ) {
+            $nit_meta_value = $source_order->get_meta( $nit_meta_key );
+            if ( '' !== (string) $nit_meta_value && null !== $nit_meta_value ) {
+                $ghost_order->update_meta_data( $nit_meta_key, $nit_meta_value );
+            }
+        }
+
         foreach ( $template_order->get_items( 'line_item' ) as $item ) {
             $new_item = new WC_Order_Item_Product();
             $new_item->set_props(

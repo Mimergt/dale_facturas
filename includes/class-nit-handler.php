@@ -85,7 +85,34 @@ class DFC_NIT_Handler {
             }
         }
 
-        // 4. Retornar default
+        // 4. Si es un ghost order de preinvoice, buscar el NIT en su pedido origen.
+        $ghost_source_order_id = absint( $order->get_meta( '_dfc_preinvoice_ghost_from' ) );
+        if ( $ghost_source_order_id > 0 ) {
+            $ghost_source_order = wc_get_order( $ghost_source_order_id );
+            if ( $ghost_source_order instanceof WC_Order ) {
+                $nit = self::find_nit_in_order( $ghost_source_order );
+                if ( '' !== $nit ) {
+                    return $nit;
+                }
+
+                $customer_id = $ghost_source_order->get_customer_id();
+                if ( $customer_id > 0 ) {
+                    $nit = self::find_nit_in_user( $customer_id );
+                    if ( '' !== $nit ) {
+                        return $nit;
+                    }
+                }
+
+                foreach ( self::get_related_subscriptions( $ghost_source_order ) as $subscription ) {
+                    $nit = self::find_nit_in_subscription( $subscription );
+                    if ( '' !== $nit ) {
+                        return $nit;
+                    }
+                }
+            }
+        }
+
+        // 5. Retornar default
         return self::DEFAULT_NIT;
     }
 
