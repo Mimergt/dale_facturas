@@ -40,13 +40,21 @@ class DFC_Product_Mapper {
      * @return int|WP_Error PLU encontrado, o WP_Error si no existe mapeo.
      */
     public function get_plu_for_product( WC_Product $product, array $item_data = [] ): int|WP_Error {
-        $sku = $product->get_sku();
+        $sku = $this->resolve_product_sku( $product );
+        $product_id = $product->get_id();
+        $parent_id = method_exists( $product, 'get_parent_id' ) ? (int) $product->get_parent_id() : 0;
+
+        // Fallback temprano: permitir mapear por ID de producto cuando no hay SKU.
+        $plu = $this->find_plu_by_product_ids( $product_id, $parent_id );
+        if ( $plu ) {
+            return $plu;
+        }
 
         if ( empty( $sku ) ) {
             return new WP_Error(
                 'dfc_product_no_sku',
                 sprintf(
-                    __( 'El producto "%s" (ID: %d) no tiene SKU asignado.', 'dale-facturas' ),
+                    __( 'El producto "%s" (ID: %d) no tiene SKU asignado ni mapeo por ID.', 'dale-facturas' ),
                     $product->get_name(),
                     $product->get_id()
                 )
@@ -86,11 +94,62 @@ class DFC_Product_Mapper {
         return new WP_Error(
             'dfc_plu_not_found',
             sprintf(
-                __( 'No se encontró PLU para el producto "%s" (SKU: %s). Revisa la tabla de mapeo SKU → PLU.', 'dale-facturas' ),
+                __( 'No se encontró PLU para el producto "%s" (SKU: %s, ID: %d). Revisa la tabla de mapeo SKU → PLU.', 'dale-facturas' ),
                 $product->get_name(),
-                $sku
+                $sku,
+                $product->get_id()
             )
         );
+    }
+
+    /**
+     * Resolver SKU del producto con fallback para variaciones/suscripciones.
+     */
+    private function resolve_product_sku( WC_Product $product ): string {
+        $sku = trim( (string) $product->get_sku() );
+        if ( '' !== $sku ) {
+            return $sku;
+        }
+
+        // Si es variación o producto hijo, intentar con SKU del producto padre.
+        $parent_id = method_exists( $product, 'get_parent_id' ) ? (int) $product->get_parent_id() : 0;
+        if ( $parent_id > 0 ) {
+            $parent = wc_get_product( $parent_id );
+            if ( $parent instanceof WC_Product ) {
+                $parent_sku = trim( (string) $parent->get_sku() );
+                if ( '' !== $parent_sku ) {
+                    return $parent_sku;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Buscar PLU por IDs de producto (ID actual o parent ID).
+     * Permite configurar en mapa entradas con sku=ID y type=sku o type=product_id.
+     */
+    private function find_plu_by_product_ids( int $product_id, int $parent_id = 0 ): ?int {
+        $candidates = array_filter( [ (string) $product_id, $parent_id > 0 ? (string) $parent_id : '' ] );
+        if ( empty( $candidates ) ) {
+            return null;
+        }
+
+        foreach ( $this->plu_map as $entry ) {
+            $entry_type = isset( $entry['type'] ) ? strtolower( (string) $entry['type'] ) : '';
+            $entry_sku = isset( $entry['sku'] ) ? trim( (string) $entry['sku'] ) : '';
+
+            if ( '' === $entry_sku ) {
+                continue;
+            }
+
+            if ( in_array( $entry_sku, $candidates, true ) && in_array( $entry_type, [ 'sku', 'product_id' ], true ) ) {
+                return (int) $entry['plu'];
+            }
+        }
+
+        return null;
     }
 
     /**
