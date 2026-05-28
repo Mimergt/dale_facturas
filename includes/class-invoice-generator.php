@@ -430,26 +430,74 @@ class DFC_Invoice_Generator {
         $items  = [];
         $subtotal = 0;
 
+        $this->log_info( sprintf( 'Construyendo payload para pedido #%d.', $order->get_id() ) );
+
         // 1. Iterar items del pedido
         foreach ( $order->get_items() as $item ) {
             if ( $item->is_type( 'line_item' ) ) {
                 $product = $item->get_product();
                 if ( ! $product ) {
+                    $this->log_info( sprintf( 'Pedido #%d: item %d sin producto cargable, se omite.', $order->get_id(), $item->get_id() ) );
                     continue;
                 }
+
+                $item_total = (float) $item->get_total();
+                $item_qty = (int) $item->get_quantity();
+                $sku = trim( (string) $product->get_sku() );
+                $product_name = (string) $product->get_name();
+                $product_type = method_exists( $product, 'get_type' ) ? (string) $product->get_type() : '';
+
+                $this->log_info(
+                    sprintf(
+                        'Pedido #%1$d item #%2$d: product_id=%3$d name="%4$s" sku="%5$s" type="%6$s" qty=%7$d total=%8$s',
+                        $order->get_id(),
+                        $item->get_id(),
+                        (int) $product->get_id(),
+                        $product_name,
+                        $sku,
+                        $product_type,
+                        $item_qty,
+                        (string) $item_total
+                    )
+                );
 
                 // Extraer datos del item (molienda, blend, etc.)
                 $item_data = DFC_Product_Mapper::extract_item_data( $item );
 
+                // Evitar que productos contenedor de suscripción sin SKU bloqueen la certificación.
+                if ( '' === $sku && str_contains( strtolower( $product_type ), 'subscription' ) ) {
+                    $this->log_info(
+                        sprintf(
+                            'Pedido #%d: se omite item contenedor de suscripción sin SKU (product_id=%d, item_id=%d).',
+                            $order->get_id(),
+                            (int) $product->get_id(),
+                            $item->get_id()
+                        )
+                    );
+                    continue;
+                }
+
                 // Obtener PLU
                 $plu = $mapper->get_plu_for_product( $product, $item_data );
                 if ( is_wp_error( $plu ) ) {
+                    $this->log_error(
+                        sprintf(
+                            'Pedido #%d: error de PLU en item %d (product_id=%d): %s',
+                            $order->get_id(),
+                            $item->get_id(),
+                            (int) $product->get_id(),
+                            $plu->get_error_message()
+                        )
+                    );
                     return $plu;
                 }
 
-                $quantity = $item->get_quantity();
+                $quantity = $item_qty;
                 // Usar total neto del item para reflejar cupones/descuentos.
-                $item_total = (float) $item->get_total();
+                if ( $quantity <= 0 ) {
+                    $this->log_info( sprintf( 'Pedido #%d: item %d con cantidad <= 0, se omite.', $order->get_id(), $item->get_id() ) );
+                    continue;
+                }
                 $price_unitario = $item_total / $quantity;
 
                 // Determinar pluPadre e identificar flags como Micro Lotes (líneas 221-298 api-facturas.php)

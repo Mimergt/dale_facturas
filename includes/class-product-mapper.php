@@ -50,6 +50,23 @@ class DFC_Product_Mapper {
             return $plu;
         }
 
+        // Si el producto no tiene SKU, aún intentar resolver por opciones del item.
+        if ( empty( $sku ) ) {
+            if ( ! empty( $item_data['grind'] ) ) {
+                $plu = $this->find_plu_by_grind( $item_data['grind'] );
+                if ( $plu ) {
+                    return $plu;
+                }
+            }
+
+            if ( ! empty( $item_data['blend'] ) ) {
+                $plu = $this->find_plu_by_blend( $item_data['blend'] );
+                if ( $plu ) {
+                    return $plu;
+                }
+            }
+        }
+
         if ( empty( $sku ) ) {
             return new WP_Error(
                 'dfc_product_no_sku',
