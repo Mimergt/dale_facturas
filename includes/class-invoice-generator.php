@@ -383,36 +383,22 @@ class DFC_Invoice_Generator {
         }
 
         try {
-            $document_type = 'invoice';
-            $order_ids = [ $source_order->get_id() ];
-            $output_mode = WPO_WCPDF()->settings->get_output_mode( $document_type );
+            $pdf_binary = $this->get_pdf_binary_from_order( $source_order->get_id() );
 
-            $pdf_binary = '';
-            for ( $attempt = 1; $attempt <= 3; $attempt++ ) {
-                $document = wcpdf_get_document( $document_type, $order_ids, true );
-                $candidate_pdf = $document ? (string) $document->get_pdf( $output_mode ) : '';
-
-                if ( '' === $candidate_pdf ) {
-                    continue;
+            if ( '' === $pdf_binary ) {
+                $this->log_info( sprintf( 'Pedido #%d: PDF directo no válido, intentando pedido fantasma para preinvoice.', $source_order->get_id() ) );
+                $ghost_order_id = $this->create_pdf_ghost_order( $source_order );
+                if ( $ghost_order_id > 0 ) {
+                    try {
+                        $pdf_binary = $this->get_pdf_binary_from_order( $ghost_order_id );
+                    } finally {
+                        wp_delete_post( $ghost_order_id, true );
+                    }
                 }
-
-                $pdf_binary = $candidate_pdf;
-                $normalized_pdf = ltrim( $candidate_pdf );
-                if ( 0 === strpos( $normalized_pdf, '%PDF-' ) ) {
-                    break;
-                }
-
-                // Reintento corto para evitar adjuntos incompletos/deformes reportados por WPO en algunos entornos.
-                usleep( 150000 );
             }
 
-            if ( empty( $pdf_binary ) ) {
-                $this->log_error( sprintf( 'Pedido #%d: no se pudo obtener binario PDF de WPO.', $source_order->get_id() ) );
-                return 0;
-            }
-
-            if ( 0 !== strpos( ltrim( $pdf_binary ), '%PDF-' ) ) {
-                $this->log_error( sprintf( 'Pedido #%d: el binario devuelto por WPO no parece PDF válido.', $source_order->get_id() ) );
+            if ( '' === $pdf_binary ) {
+                $this->log_error( sprintf( 'Pedido #%d: no se pudo obtener binario PDF válido de WPO.', $source_order->get_id() ) );
                 return 0;
             }
 
@@ -444,6 +430,155 @@ class DFC_Invoice_Generator {
             $this->log_error( sprintf( 'Pedido #%d: excepción generando PDF preinvoice: %s', $source_order->get_id(), $e->getMessage() ) );
             return 0;
         }
+    }
+
+    /**
+     * Obtiene binario PDF desde WPO para un pedido.
+     */
+    private function get_pdf_binary_from_order( int $order_id ): string {
+        $document_type = 'invoice';
+        $order_ids = [ $order_id ];
+        $output_mode = WPO_WCPDF()->settings->get_output_mode( $document_type );
+
+        for ( $attempt = 1; $attempt <= 3; $attempt++ ) {
+            $document = wcpdf_get_document( $document_type, $order_ids, true );
+            $candidate_pdf = $document ? (string) $document->get_pdf( $output_mode ) : '';
+
+            if ( '' === $candidate_pdf ) {
+                continue;
+            }
+
+            if ( $this->looks_like_pdf( $candidate_pdf ) ) {
+                return $candidate_pdf;
+            }
+
+            // Reintento corto para evitar binarios incompletos en algunos entornos.
+            usleep( 150000 );
+        }
+
+        return '';
+    }
+
+    /**
+     * Crea una copia temporal del pedido para generar PDF, emulando el flujo legacy del theme.
+     */
+    private function create_pdf_ghost_order( WC_Order $source_order ): int {
+        $ghost_order = wc_create_order(
+            [
+                'status'      => 'wc-processing',
+                'customer_id' => absint( $source_order->get_customer_id() ),
+            ]
+        );
+
+        if ( is_wp_error( $ghost_order ) || ! $ghost_order instanceof WC_Order ) {
+            return 0;
+        }
+
+        $ghost_order->set_created_via( 'dfc-preinvoice-ghost' );
+        $ghost_order->set_currency( $source_order->get_currency() );
+        $ghost_order->set_prices_include_tax( $source_order->get_prices_include_tax() );
+        $ghost_order->set_payment_method( $source_order->get_payment_method() );
+        $ghost_order->set_payment_method_title( $source_order->get_payment_method_title() );
+        $ghost_order->set_customer_note( $source_order->get_customer_note() );
+        $ghost_order->set_address( $source_order->get_address( 'billing' ), 'billing' );
+        $ghost_order->set_address( $source_order->get_address( 'shipping' ), 'shipping' );
+        $ghost_order->update_meta_data( '_dfc_preinvoice_ghost_from', $source_order->get_id() );
+
+        foreach ( $source_order->get_items( 'line_item' ) as $item ) {
+            $new_item = new WC_Order_Item_Product();
+            $new_item->set_props(
+                [
+                    'name'         => $item->get_name(),
+                    'product_id'   => $item->get_product_id(),
+                    'variation_id' => $item->get_variation_id(),
+                    'quantity'     => $item->get_quantity(),
+                    'tax_class'    => $item->get_tax_class(),
+                    'subtotal'     => $item->get_subtotal(),
+                    'total'        => $item->get_total(),
+                    'subtotal_tax' => $item->get_subtotal_tax(),
+                    'total_tax'    => $item->get_total_tax(),
+                    'taxes'        => $item->get_taxes(),
+                ]
+            );
+
+            foreach ( $item->get_meta_data() as $meta ) {
+                $new_item->add_meta_data( $meta->key, $meta->value, true );
+            }
+
+            $ghost_order->add_item( $new_item );
+        }
+
+        foreach ( $source_order->get_items( 'shipping' ) as $item ) {
+            $new_item = new WC_Order_Item_Shipping();
+            $new_item->set_props(
+                [
+                    'method_title' => $item->get_method_title(),
+                    'method_id'    => $item->get_method_id(),
+                    'instance_id'  => $item->get_instance_id(),
+                    'total'        => $item->get_total(),
+                    'taxes'        => $item->get_taxes(),
+                ]
+            );
+
+            foreach ( $item->get_meta_data() as $meta ) {
+                $new_item->add_meta_data( $meta->key, $meta->value, true );
+            }
+
+            $ghost_order->add_item( $new_item );
+        }
+
+        foreach ( $source_order->get_items( 'fee' ) as $item ) {
+            $new_item = new WC_Order_Item_Fee();
+            $new_item->set_props(
+                [
+                    'name'      => $item->get_name(),
+                    'tax_class' => $item->get_tax_class(),
+                    'tax_status'=> $item->get_tax_status(),
+                    'total'     => $item->get_total(),
+                    'total_tax' => $item->get_total_tax(),
+                    'taxes'     => $item->get_taxes(),
+                ]
+            );
+
+            foreach ( $item->get_meta_data() as $meta ) {
+                $new_item->add_meta_data( $meta->key, $meta->value, true );
+            }
+
+            $ghost_order->add_item( $new_item );
+        }
+
+        foreach ( $source_order->get_items( 'coupon' ) as $item ) {
+            $new_item = new WC_Order_Item_Coupon();
+            $new_item->set_props(
+                [
+                    'code'         => $item->get_code(),
+                    'discount'     => $item->get_discount(),
+                    'discount_tax' => $item->get_discount_tax(),
+                ]
+            );
+            $ghost_order->add_item( $new_item );
+        }
+
+        $ghost_order->set_shipping_total( (float) $source_order->get_shipping_total() );
+        $ghost_order->set_discount_total( (float) $source_order->get_discount_total() );
+        $ghost_order->set_discount_tax( (float) $source_order->get_discount_tax() );
+        $ghost_order->set_cart_tax( (float) $source_order->get_cart_tax() );
+        $ghost_order->set_shipping_tax( (float) $source_order->get_shipping_tax() );
+        $ghost_order->set_total_tax( (float) $source_order->get_total_tax() );
+        $ghost_order->set_total( (float) $source_order->get_total() );
+        $ghost_order->save();
+
+        $ghost_order_id = $ghost_order->get_id();
+        $this->log_info( sprintf( 'Pedido #%d: ghost order #%d creado para generar PDF preinvoice.', $source_order->get_id(), $ghost_order_id ) );
+
+        return $ghost_order_id;
+    }
+
+    /**
+     * Validación mínima de binario PDF.
+     */
+    private function looks_like_pdf( string $content ): bool {
+        return 0 === strpos( ltrim( $content ), '%PDF-' );
     }
 
     /**

@@ -69,9 +69,6 @@ class DFC_Admin {
         if ( empty( $pdf_url ) && $subscription_attachment_id > 0 ) {
             $pdf_url = (string) wp_get_attachment_url( $subscription_attachment_id );
         }
-        if ( ! empty( $fallback_pdf_url ) ) {
-            $pdf_url = $fallback_pdf_url;
-        }
 
         wp_nonce_field( 'dfc_process_subscription_invoice', 'dfc_subscription_invoice_nonce' );
         ?>
@@ -136,9 +133,6 @@ class DFC_Admin {
 
         if ( empty( $pdf_url ) && $subscription_attachment_id > 0 ) {
             $pdf_url = (string) wp_get_attachment_url( $subscription_attachment_id );
-        }
-        if ( ! empty( $fallback_pdf_url ) ) {
-            $pdf_url = $fallback_pdf_url;
         }
 
         wp_nonce_field( 'dfc_process_subscription_invoice_v2', 'dfc_subscription_invoice_nonce_v2' );
