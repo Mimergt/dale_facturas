@@ -136,9 +136,6 @@ class DFC_Admin {
         wp_nonce_field( 'dfc_process_subscription_invoice_v2', 'dfc_subscription_invoice_nonce_v2' );
         ?>
         <p>
-            <strong><?php esc_html_e( 'Flujo nuevo del plugin (aislado del theme).', 'dale-facturas' ); ?></strong>
-        </p>
-        <p>
             <?php esc_html_e( 'Usa este botón para certificar FEL desde el plugin y preparar la reutilización en renovación.', 'dale-facturas' ); ?>
         </p>
 
