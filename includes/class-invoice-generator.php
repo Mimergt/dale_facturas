@@ -224,9 +224,13 @@ class DFC_Invoice_Generator {
         }
 
         // Asegurar que exista PDF preconstruido para poder asociarlo en el renewal.
-        $this->ensure_prebuilt_pdf_attachment( $source_order );
+        $prebuilt_attachment_id = $this->ensure_prebuilt_pdf_attachment( $source_order );
 
         $this->copy_fel_meta( $source_order, $order );
+        if ( $prebuilt_attachment_id > 0 ) {
+            $order->update_meta_data( '_invoice_created_by_button', $prebuilt_attachment_id );
+            $this->log_info( sprintf( 'Pedido #%d asociado explícitamente a prebuilt attachment_id=%d.', $order_id, $prebuilt_attachment_id ) );
+        }
         $order->update_meta_data( self::META_PREBUILT_APPLIED_FROM, $source_order->get_id() );
         $order->update_meta_data( self::META_PREBUILT_APPLIED_AT, time() );
         $order->save_meta_data();
@@ -381,12 +385,34 @@ class DFC_Invoice_Generator {
         try {
             $document_type = 'invoice';
             $order_ids = [ $source_order->get_id() ];
-            $document = wcpdf_get_document( $document_type, $order_ids, true );
             $output_mode = WPO_WCPDF()->settings->get_output_mode( $document_type );
-            $pdf_binary = $document ? $document->get_pdf( $output_mode ) : '';
+
+            $pdf_binary = '';
+            for ( $attempt = 1; $attempt <= 3; $attempt++ ) {
+                $document = wcpdf_get_document( $document_type, $order_ids, true );
+                $candidate_pdf = $document ? (string) $document->get_pdf( $output_mode ) : '';
+
+                if ( '' === $candidate_pdf ) {
+                    continue;
+                }
+
+                $pdf_binary = $candidate_pdf;
+                $normalized_pdf = ltrim( $candidate_pdf );
+                if ( 0 === strpos( $normalized_pdf, '%PDF-' ) ) {
+                    break;
+                }
+
+                // Reintento corto para evitar adjuntos incompletos/deformes reportados por WPO en algunos entornos.
+                usleep( 150000 );
+            }
 
             if ( empty( $pdf_binary ) ) {
                 $this->log_error( sprintf( 'Pedido #%d: no se pudo obtener binario PDF de WPO.', $source_order->get_id() ) );
+                return 0;
+            }
+
+            if ( 0 !== strpos( ltrim( $pdf_binary ), '%PDF-' ) ) {
+                $this->log_error( sprintf( 'Pedido #%d: el binario devuelto por WPO no parece PDF válido.', $source_order->get_id() ) );
                 return 0;
             }
 

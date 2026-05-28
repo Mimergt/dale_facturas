@@ -72,6 +72,22 @@ class Dale_Facturas {
 
         // i18n
         add_action( 'init', [ $this, 'load_textdomain' ] );
+
+        // Aislar el flujo nuevo del plugin frente a hooks legacy del theme.
+        add_action( 'wp_loaded', [ $this, 'disable_legacy_theme_invoice_hooks' ], 20 );
+    }
+
+    /**
+     * Desactiva hooks legacy del theme que facturan en paralelo.
+     */
+    public function disable_legacy_theme_invoice_hooks(): void {
+        if ( has_action( 'woocommerce_order_status_completed', 'wc_create_automatic_invoice' ) ) {
+            remove_action( 'woocommerce_order_status_completed', 'wc_create_automatic_invoice' );
+        }
+
+        if ( has_action( 'wp_ajax_custom_generate_invoice', 'dc_send_renewal_invoice' ) ) {
+            remove_action( 'wp_ajax_custom_generate_invoice', 'dc_send_renewal_invoice' );
+        }
     }
 
     /**
