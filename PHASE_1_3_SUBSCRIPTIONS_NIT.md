@@ -1,13 +1,13 @@
 # Fase 1.3 - Suscripciones + NIT + Migracion del Theme
 
-Fecha: 2026-05-21
-Version plugin: 1.3.0
+Fecha: 2026-05-28
+Version plugin: 1.3.20
 
 ## Objetivo
 
 1. Cubrir el flujo historico de suscripciones donde se prepara factura antes de que exista el pedido de renovacion.
-2. Asegurar resolucion de NIT compatible con metadatos historicos en pedido, suscripcion y usuario.
-3. Reducir riesgo de conflicto con el theme sin eliminar archivos como primera opcion.
+2. Asegurar resolucion de NIT compatible con metadatos historicos en pedido, suscripcion, usuario y origen ghost.
+3. Reducir riesgo de conflicto con el theme desactivando hooks legacy desde el plugin.
 
 ## Cambios implementados en el plugin
 
@@ -15,9 +15,10 @@ Version plugin: 1.3.0
 
 - Se agrego metabox en admin de suscripcion con boton Procesar Factura.
 - Endpoint AJAX seguro: nonce + permisos manage_woocommerce.
-- El proceso toma el pedido base de la suscripcion, certifica FEL si hace falta y deja marcada la suscripcion con:
+- El proceso usa un ghost order temporal para generar el PDF preinvoice con paridad al theme, certifica FEL si hace falta y deja marcada la suscripcion con:
   - _dfc_prebuilt_invoice_source_order
   - _dfc_prebuilt_invoice_ready_at
+- El PDF interno se genera desde un ghost order temporal y se elimina al final.
 - Cuando se crea el renewal order (hook wcs_renewal_order_created), se copian metadatos FEL al nuevo pedido automaticamente.
 - Adicionalmente, al completar pedido se vuelve a intentar aplicar FEL preconstruida antes de generar una nueva.
 
@@ -27,12 +28,13 @@ Version plugin: 1.3.0
   - Pedido (keys prioritarias y fallback por cualquier meta key que contenga nit)
   - Usuario/cliente (incluye billing_nit y legacy nit_number)
   - Suscripcion asociada (keys prioritarias + fallback por keys con nit)
+  - Origen ghost del preinvoice cuando aplica
 - Se mejoro sanitizacion para soportar formatos historicos alfanumericos (por ejemplo con K), sin perder compatibilidad con CF.
 - El template PDF ahora usa DFC_NIT_Handler::get_nit() para la misma logica centralizada.
 
 ### 3) Version
 
-- Cabecera del plugin y constante DFC_VERSION actualizadas a 1.3.0.
+- Cabecera del plugin y constante DFC_VERSION actualizadas a 1.3.20.
 
 ## Analisis de conflicto con el theme (sin borrar codigo aun)
 
@@ -49,21 +51,18 @@ Version plugin: 1.3.0
 
 ### Recomendacion operativa (ultima opcion: borrar)
 
-1. No borrar archivos del theme en esta fase.
-2. Desactivar hooks legacy de facturacion en theme (primera medida segura):
-   - woocommerce_order_status_completed => wc_create_automatic_invoice
-   - wp_ajax_custom_generate_invoice => dc_send_renewal_invoice
-   - add_meta_box create-renewal-invoices en shop_subscription
-3. Mantener solo campos de checkout/perfil de usuario (billing_nit y billing_nitname) mientras se valida en produccion.
-4. Tras validar 1 o 2 ciclos de renovacion exitosos, retirar codigo legacy de facturacion del theme.
+1. Mantener activos solo los hooks del plugin; el plugin ya desactiva los hooks legacy del theme al cargar.
+2. Mantener solo campos de checkout/perfil de usuario (billing_nit y billing_nitname) mientras se valida en produccion.
+3. Si se requiere limpieza final, borrar el flujo legacy del theme despues de confirmar varias renovaciones exitosas.
 
 ## Plan de validacion en produccion
 
-1. Suscripcion activa: en admin de suscripcion usar Procesar Factura.
+1. Suscripcion activa: en admin de suscripcion usar Procesar Factura (Nuevo).
 2. Confirmar nota en suscripcion y metadatos _dfc_prebuilt_invoice_*.
-3. Crear/esperar renewal order.
-4. Verificar que el renewal order reciba serie/transaccion _dfc_* sin nueva llamada innecesaria.
-5. Validar NIT en payload/request guardado y en PDF generado.
+3. Verificar que el PDF preinvoice abra sin access key y que use attachment directo.
+4. Crear/esperar renewal order.
+5. Verificar que el renewal order reciba serie/transaccion _dfc_* sin nueva llamada innecesaria.
+6. Validar NIT en payload/request guardado y en PDF generado.
 
 ## Nota de compatibilidad
 
