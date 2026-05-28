@@ -161,6 +161,11 @@ class DFC_Invoice_Generator {
             $subscription->update_meta_data( self::META_PREBUILT_ATTACHMENT_ID, $attachment_id );
             $subscription->save_meta_data();
             $this->log_info( sprintf( 'Suscripción #%d guardó preinvoice attachment_id=%d.', $subscription_id, $attachment_id ) );
+        } else {
+            return new WP_Error(
+                'dfc_preinvoice_pdf_failed',
+                __( 'La FEL se certificó, pero no se pudo generar el PDF preinvoice. Reintenta el botón y revisa logs.', 'dale-facturas' )
+            );
         }
 
         $customer_id = absint( $subscription->get_customer_id() );
@@ -589,7 +594,6 @@ class DFC_Invoice_Generator {
         $ghost_order->set_discount_tax( (float) $template_order->get_discount_tax() );
         $ghost_order->set_cart_tax( (float) $template_order->get_cart_tax() );
         $ghost_order->set_shipping_tax( (float) $template_order->get_shipping_tax() );
-        $ghost_order->set_total_tax( (float) $template_order->get_total_tax() );
         $ghost_order->set_total( (float) $template_order->get_total() );
         $ghost_order->save();
 

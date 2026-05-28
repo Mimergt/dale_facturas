@@ -55,7 +55,6 @@ class DFC_Admin {
         $ready_at = $subscription ? (int) $subscription->get_meta( DFC_Invoice_Generator::META_PREBUILT_READY_AT ) : 0;
         $subscription_attachment_id = $subscription ? absint( $subscription->get_meta( DFC_Invoice_Generator::META_PREBUILT_ATTACHMENT_ID ) ) : 0;
         $pdf_url = '';
-        $fallback_pdf_url = '';
         if ( $source_order_id ) {
             $source_order = wc_get_order( $source_order_id );
             if ( $source_order ) {
@@ -63,7 +62,6 @@ class DFC_Admin {
                 if ( $attachment_id > 0 ) {
                     $pdf_url = (string) wp_get_attachment_url( $attachment_id );
                 }
-                $fallback_pdf_url = admin_url( 'admin-ajax.php?action=generate_wpo_wcpdf&document_type=invoice&order_ids=' . $source_order_id );
             }
         }
         if ( empty( $pdf_url ) && $subscription_attachment_id > 0 ) {
@@ -160,12 +158,6 @@ class DFC_Admin {
                 <p>
                     <a class="button button-secondary" target="_blank" href="<?php echo esc_url( $pdf_url ); ?>">
                         <?php esc_html_e( 'Ver PDF preinvoice', 'dale-facturas' ); ?>
-                    </a>
-                </p>
-            <?php elseif ( ! empty( $fallback_pdf_url ) ) : ?>
-                <p>
-                    <a class="button button-secondary" target="_blank" href="<?php echo esc_url( $fallback_pdf_url ); ?>">
-                        <?php esc_html_e( 'Ver PDF del pedido base', 'dale-facturas' ); ?>
                     </a>
                 </p>
             <?php endif; ?>
