@@ -652,14 +652,34 @@ class DFC_Invoice_Generator {
         $formas_pago = $this->build_formas_pago( $order, (float) $order->get_total() );
 
         // 8. Construir payload final (estructura compatible con api-facturas.php original)
-        $order_number = (string) $order->get_order_number();
-        $macrobase_id = '1' . $order_number;
+        // Legacy theme: usa _wcj_order_number; si no existe, fallback a get_order_number().
+        $legacy_order_number = (string) $order->get_meta( '_wcj_order_number' );
+        $order_number_raw = '' !== trim( $legacy_order_number ) ? $legacy_order_number : (string) $order->get_order_number();
+        $order_number_digits = preg_replace( '/\D+/', '', $order_number_raw );
+        if ( '' === $order_number_digits ) {
+            $order_number_digits = (string) $order->get_id();
+        }
+
+        // Requisito operativo: el id de Macrobase debe iniciar con "1".
+        $macrobase_id = str_starts_with( $order_number_digits, '1' )
+            ? $order_number_digits
+            : '1' . $order_number_digits;
+
+        $this->log_info(
+            sprintf(
+                'Pedido #%d: numeroOrden base="%s" (wcj="%s") -> id Macrobase="%s".',
+                $order->get_id(),
+                $order_number_digits,
+                $legacy_order_number,
+                $macrobase_id
+            )
+        );
 
         $payload = [
             // Macrobase requiere "id" en ordenes[].
             'id'           => $macrobase_id,
             // Se mantiene por compatibilidad con implementaciones previas.
-            'numeroOrden'  => $order_number,
+            'numeroOrden'  => $order_number_digits,
             'clienteNombre' => $cliente_nombre_factura,
             'clienteTelefono' => $cliente['telefono'],
             'clienteEmail' => $cliente['email'],
