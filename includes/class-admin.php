@@ -135,6 +135,70 @@ class DFC_Admin {
             </button>
             <span id="dfc-process-subscription-result-v2" style="display:block; margin-top:8px;"></span>
         </p>
+        <script>
+        (function () {
+            var btn = document.getElementById('dfc-process-subscription-invoice-v2');
+            var result = document.getElementById('dfc-process-subscription-result-v2');
+            var nonceInput = document.querySelector('input[name="dfc_subscription_invoice_nonce_v2"]');
+            if (!btn || !result || !nonceInput || btn.dataset.boundV2 === '1') {
+                return;
+            }
+            btn.dataset.boundV2 = '1';
+
+            btn.addEventListener('click', function () {
+                var subscriptionId = btn.getAttribute('data-subscription-id');
+                var nonce = nonceInput.value;
+                if (!subscriptionId || !nonce) {
+                    result.textContent = '<?php echo esc_js( __( 'Error: faltan datos del formulario.', 'dale-facturas' ) ); ?>';
+                    result.style.color = '#dc3232';
+                    return;
+                }
+
+                btn.disabled = true;
+                result.textContent = '<?php echo esc_js( __( 'Procesando...', 'dale-facturas' ) ); ?>';
+                result.style.color = '#666';
+
+                var body = new URLSearchParams();
+                body.set('action', 'dfc_process_subscription_invoice_v2');
+                body.set('nonce', nonce);
+                body.set('subscription_id', subscriptionId);
+
+                fetch('<?php echo esc_url( admin_url( 'admin-ajax.php' ) ); ?>', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                    },
+                    body: body.toString()
+                })
+                .then(function (res) { return res.text(); })
+                .then(function (text) {
+                    var payload = null;
+                    try {
+                        payload = JSON.parse(text);
+                    } catch (e) {
+                        payload = null;
+                    }
+
+                    if (payload && payload.success) {
+                        result.textContent = payload.data && payload.data.message ? payload.data.message : '<?php echo esc_js( __( 'Éxito', 'dale-facturas' ) ); ?>';
+                        result.style.color = '#46b450';
+                    } else {
+                        var msg = (payload && payload.data && payload.data.message) ? payload.data.message : text.replace(/\s+/g, ' ').slice(0, 180);
+                        result.textContent = '<?php echo esc_js( __( 'Error', 'dale-facturas' ) ); ?>: ' + msg;
+                        result.style.color = '#dc3232';
+                    }
+                })
+                .catch(function (err) {
+                    result.textContent = '<?php echo esc_js( __( 'Error', 'dale-facturas' ) ); ?>: ' + (err && err.message ? err.message : 'network');
+                    result.style.color = '#dc3232';
+                })
+                .finally(function () {
+                    btn.disabled = false;
+                });
+            });
+        })();
+        </script>
         <?php
     }
 
