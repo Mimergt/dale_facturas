@@ -27,10 +27,12 @@ class DFC_Invoice_Generator {
     const META_FEL_TIMESTAMP   = '_dfc_fel_timestamp';
     const META_PREBUILT_SOURCE_ORDER = '_dfc_prebuilt_invoice_source_order';
     const META_PREBUILT_READY_AT     = '_dfc_prebuilt_invoice_ready_at';
+    const META_PREBUILT_ATTACHMENT_ID = '_dfc_prebuilt_invoice_attachment_id';
     const META_PREBUILT_APPLIED_FROM = '_dfc_prebuilt_invoice_applied_from';
     const META_PREBUILT_APPLIED_AT   = '_dfc_prebuilt_invoice_applied_at';
     const USER_META_PREBUILT_SOURCE_ORDER = '_dfc_prebuilt_invoice_source_order';
     const USER_META_PREBUILT_READY_AT     = '_dfc_prebuilt_invoice_ready_at';
+    const USER_META_LEGACY_ATTACHMENT_ID  = '_invoice_created_by_button';
 
     /**
      * Registrar hooks.
@@ -59,6 +61,12 @@ class DFC_Invoice_Generator {
         // Si existe factura preparada desde suscripcion, copiarla y evitar nueva certificacion.
         if ( $this->maybe_apply_prebuilt_subscription_invoice( $order ) ) {
             $this->log_info( sprintf( 'Pedido #%d reutilizó factura preconstruida. No se genera nueva.', $order_id ) );
+            return;
+        }
+
+        // Si es renovación y existe una preinvoice disponible, NO generar una nueva para evitar doble facturación.
+        if ( $this->is_renewal_order( $order ) && $this->has_prebuilt_reference_for_order( $order ) ) {
+            $this->log_error( sprintf( 'Pedido #%d es renovación con preinvoice disponible pero no pudo aplicarse. Se bloquea nueva certificación para evitar duplicado.', $order_id ) );
             return;
         }
 
@@ -133,10 +141,20 @@ class DFC_Invoice_Generator {
         $subscription->update_meta_data( self::META_PREBUILT_READY_AT, time() );
         $subscription->save_meta_data();
 
+        $attachment_id = $this->ensure_prebuilt_pdf_attachment( $source_order );
+        if ( $attachment_id > 0 ) {
+            $subscription->update_meta_data( self::META_PREBUILT_ATTACHMENT_ID, $attachment_id );
+            $subscription->save_meta_data();
+            $this->log_info( sprintf( 'Suscripción #%d guardó preinvoice attachment_id=%d.', $subscription_id, $attachment_id ) );
+        }
+
         $customer_id = absint( $subscription->get_customer_id() );
         if ( $customer_id > 0 ) {
             update_user_meta( $customer_id, self::USER_META_PREBUILT_SOURCE_ORDER, $source_order->get_id() );
             update_user_meta( $customer_id, self::USER_META_PREBUILT_READY_AT, time() );
+            if ( $attachment_id > 0 ) {
+                update_user_meta( $customer_id, self::USER_META_LEGACY_ATTACHMENT_ID, $attachment_id );
+            }
             $this->log_info( sprintf( 'Suscripción #%d guardó preinvoice en user_meta para user #%d, source_order #%d.', $subscription_id, $customer_id, $source_order->get_id() ) );
         }
 
@@ -189,6 +207,9 @@ class DFC_Invoice_Generator {
             $this->log_error( sprintf( 'Pedido #%d tenía source_order #%d pero sin FEL válida.', $order_id, $source_order_id ) );
             return false;
         }
+
+        // Asegurar que exista PDF preconstruido para poder asociarlo en el renewal.
+        $this->ensure_prebuilt_pdf_attachment( $source_order );
 
         $this->copy_fel_meta( $source_order, $order );
         $order->update_meta_data( self::META_PREBUILT_APPLIED_FROM, $source_order->get_id() );
@@ -279,7 +300,11 @@ class DFC_Invoice_Generator {
     private function get_related_subscriptions_for_order( WC_Order $order ): array {
         $subscriptions = [];
 
-        if ( function_exists( 'wcs_get_subscriptions_for_order' ) ) {
+        if ( function_exists( 'wcs_get_subscriptions_for_renewal_order' ) ) {
+            $subscriptions = wcs_get_subscriptions_for_renewal_order( $order );
+        }
+
+        if ( empty( $subscriptions ) && function_exists( 'wcs_get_subscriptions_for_order' ) ) {
             $subscriptions = wcs_get_subscriptions_for_order( $order->get_id() );
         }
 
@@ -294,6 +319,90 @@ class DFC_Invoice_Generator {
         }
 
         return is_array( $subscriptions ) ? $subscriptions : [];
+    }
+
+    /**
+     * Determina si el pedido es de renovación.
+     */
+    private function is_renewal_order( WC_Order $order ): bool {
+        if ( function_exists( 'wcs_order_contains_renewal' ) && wcs_order_contains_renewal( $order ) ) {
+            return true;
+        }
+        return absint( $order->get_meta( '_subscription_renewal' ) ) > 0;
+    }
+
+    /**
+     * Verifica si hay referencia preinvoice para el pedido de renovación.
+     */
+    private function has_prebuilt_reference_for_order( WC_Order $order ): bool {
+        foreach ( $this->get_related_subscriptions_for_order( $order ) as $subscription ) {
+            if ( absint( $subscription->get_meta( self::META_PREBUILT_SOURCE_ORDER ) ) > 0 ) {
+                return true;
+            }
+        }
+
+        $customer_id = absint( $order->get_customer_id() );
+        if ( $customer_id > 0 && absint( get_user_meta( $customer_id, self::USER_META_PREBUILT_SOURCE_ORDER, true ) ) > 0 ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Genera y guarda (si hace falta) el PDF preconstruido como attachment.
+     */
+    private function ensure_prebuilt_pdf_attachment( WC_Order $source_order ): int {
+        $existing_attachment_id = absint( $source_order->get_meta( '_invoice_created_by_button' ) );
+        if ( $existing_attachment_id > 0 ) {
+            return $existing_attachment_id;
+        }
+
+        if ( ! function_exists( 'wcpdf_get_document' ) || ! function_exists( 'WPO_WCPDF' ) ) {
+            $this->log_info( sprintf( 'Pedido #%d: WPO PDF no disponible para generar attachment preinvoice.', $source_order->get_id() ) );
+            return 0;
+        }
+
+        try {
+            $document_type = 'invoice';
+            $order_ids = [ $source_order->get_id() ];
+            $document = wcpdf_get_document( $document_type, $order_ids, true );
+            $output_mode = WPO_WCPDF()->settings->get_output_mode( $document_type );
+            $pdf_binary = $document ? $document->get_pdf( $output_mode ) : '';
+
+            if ( empty( $pdf_binary ) ) {
+                $this->log_error( sprintf( 'Pedido #%d: no se pudo obtener binario PDF de WPO.', $source_order->get_id() ) );
+                return 0;
+            }
+
+            $upload = wp_upload_bits( 'invoice-' . $source_order->get_id() . '-prebuilt.pdf', null, $pdf_binary );
+            if ( ! empty( $upload['error'] ) || empty( $upload['file'] ) ) {
+                $this->log_error( sprintf( 'Pedido #%d: error guardando PDF preinvoice: %s', $source_order->get_id(), (string) ( $upload['error'] ?? 'unknown' ) ) );
+                return 0;
+            }
+
+            $attachment = [
+                'post_mime_type' => 'application/pdf',
+                'post_title'     => 'invoice-' . $source_order->get_id() . '-prebuilt',
+                'post_content'   => '',
+                'post_status'    => 'inherit',
+            ];
+
+            $attachment_id = wp_insert_attachment( $attachment, $upload['file'], $source_order->get_id() );
+            if ( ! $attachment_id || is_wp_error( $attachment_id ) ) {
+                $this->log_error( sprintf( 'Pedido #%d: fallo insertando attachment PDF preinvoice.', $source_order->get_id() ) );
+                return 0;
+            }
+
+            $source_order->update_meta_data( '_invoice_created_by_button', $attachment_id );
+            $source_order->save_meta_data();
+
+            $this->log_info( sprintf( 'Pedido #%d: PDF preinvoice creado attachment_id=%d.', $source_order->get_id(), $attachment_id ) );
+            return (int) $attachment_id;
+        } catch ( Throwable $e ) {
+            $this->log_error( sprintf( 'Pedido #%d: excepción generando PDF preinvoice: %s', $source_order->get_id(), $e->getMessage() ) );
+            return 0;
+        }
     }
 
     /**
