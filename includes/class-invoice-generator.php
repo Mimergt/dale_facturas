@@ -94,7 +94,7 @@ class DFC_Invoice_Generator {
      *
      * @return array|WP_Error
      */
-    public function process_subscription_preinvoice( int $subscription_id ) {
+    public function process_subscription_preinvoice( int $subscription_id, bool $force_regenerate = false ) {
         if ( ! function_exists( 'wcs_get_subscription' ) ) {
             return new WP_Error(
                 'dfc_subscriptions_missing',
@@ -128,8 +128,23 @@ class DFC_Invoice_Generator {
 
         $this->log_info( sprintf( 'Preinvoice suscripción #%d usando pedido base #%d.', $subscription_id, $parent_order_id ) );
 
-        if ( ! $source_order->get_meta( self::META_FEL_SERIE ) ) {
-            $this->log_info( sprintf( 'Pedido base #%d sin FEL previa. Generando factura.', $parent_order_id ) );
+        if ( $force_regenerate ) {
+            $this->log_info( sprintf( 'Preinvoice suscripción #%d: forzando certificación nueva para pedido base #%d.', $subscription_id, $parent_order_id ) );
+            $source_order->delete_meta_data( self::META_FEL_SERIE );
+            $source_order->delete_meta_data( self::META_FEL_TRANSACCION );
+            $source_order->delete_meta_data( self::META_FEL_FIRMA );
+            $source_order->delete_meta_data( self::META_FEL_CONTINGENCIA );
+            $source_order->delete_meta_data( self::META_API_RESPONSE );
+            $source_order->delete_meta_data( self::META_FEL_ERROR );
+            $source_order->delete_meta_data( '_invoice_created_by_button' );
+            $source_order->save_meta_data();
+
+            $subscription->delete_meta_data( self::META_PREBUILT_ATTACHMENT_ID );
+            $subscription->save_meta_data();
+        }
+
+        if ( ! $source_order->get_meta( self::META_FEL_SERIE ) || $force_regenerate ) {
+            $this->log_info( sprintf( 'Pedido base #%d %s. Generando factura.', $parent_order_id, $force_regenerate ? 'con modo forzado' : 'sin FEL previa' ) );
             $result = $this->generate_invoice( $source_order, 'preinvoice' );
             if ( is_wp_error( $result ) ) {
                 $this->log_error( sprintf( 'Error generando preinvoice para suscripción #%d: %s', $subscription_id, $result->get_error_message() ) );
