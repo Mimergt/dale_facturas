@@ -122,7 +122,7 @@ class DFC_Invoice_Generator {
 
         if ( ! $source_order->get_meta( self::META_FEL_SERIE ) ) {
             $this->log_info( sprintf( 'Pedido base #%d sin FEL previa. Generando factura.', $parent_order_id ) );
-            $result = $this->generate_invoice( $source_order );
+            $result = $this->generate_invoice( $source_order, 'preinvoice' );
             if ( is_wp_error( $result ) ) {
                 $this->log_error( sprintf( 'Error generando preinvoice para suscripción #%d: %s', $subscription_id, $result->get_error_message() ) );
                 return $result;
@@ -304,9 +304,9 @@ class DFC_Invoice_Generator {
      *
      * @return bool|WP_Error true si éxito, WP_Error si falló.
      */
-    public function generate_invoice( WC_Order $order ) {
+    public function generate_invoice( WC_Order $order, string $context = 'default' ) {
         // 1. Construir payload
-        $payload = $this->build_invoice_payload( $order );
+        $payload = $this->build_invoice_payload( $order, $context );
         if ( is_wp_error( $payload ) ) {
             $this->save_error( $order, $payload->get_error_message() );
             return $payload;
@@ -425,7 +425,7 @@ class DFC_Invoice_Generator {
      *
      * @return array|WP_Error Payload listo para enviar, o WP_Error si algo falta.
      */
-    private function build_invoice_payload( WC_Order $order ) {
+    private function build_invoice_payload( WC_Order $order, string $context = 'default' ) {
         $mapper = new DFC_Product_Mapper();
         $items  = [];
         $subtotal = 0;
@@ -661,14 +661,20 @@ class DFC_Invoice_Generator {
         }
 
         // Requisito operativo: el id de Macrobase debe iniciar con "1".
-        $macrobase_id = str_starts_with( $order_number_digits, '1' )
-            ? $order_number_digits
-            : '1' . $order_number_digits;
+        // En preinvoice usamos un ID único por post_id para evitar choques históricos de ECN.
+        if ( 'preinvoice' === $context ) {
+            $macrobase_id = '1' . (string) $order->get_id();
+        } else {
+            $macrobase_id = str_starts_with( $order_number_digits, '1' )
+                ? $order_number_digits
+                : '1' . $order_number_digits;
+        }
 
         $this->log_info(
             sprintf(
-                'Pedido #%d: numeroOrden base="%s" (wcj="%s") -> id Macrobase="%s".',
+                'Pedido #%d: context="%s" numeroOrden base="%s" (wcj="%s") -> id Macrobase="%s".',
                 $order->get_id(),
+                $context,
                 $order_number_digits,
                 $legacy_order_number,
                 $macrobase_id
