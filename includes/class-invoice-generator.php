@@ -25,6 +25,7 @@ class DFC_Invoice_Generator {
     const META_API_REQUEST     = '_dfc_api_request';
     const META_API_RESPONSE    = '_dfc_api_response';
     const META_FEL_TIMESTAMP   = '_dfc_fel_timestamp';
+    const META_FEL_CLIENTE_NOMBRE_COMERCIAL = '_dfc_fel_cliente_nombre_comercial';
     const META_PREBUILT_SOURCE_ORDER = '_dfc_prebuilt_invoice_source_order';
     const META_PREBUILT_READY_AT     = '_dfc_prebuilt_invoice_ready_at';
     const META_PREBUILT_ATTACHMENT_ID = '_dfc_prebuilt_invoice_attachment_id';
@@ -285,6 +286,7 @@ class DFC_Invoice_Generator {
             self::META_FEL_FIRMA,
             self::META_FEL_CONTINGENCIA,
             self::META_FEL_TIMESTAMP,
+            self::META_FEL_CLIENTE_NOMBRE_COMERCIAL,
             self::META_API_REQUEST,
             self::META_API_RESPONSE,
             '_dfc_fel_fecha_certificacion',
@@ -974,7 +976,7 @@ class DFC_Invoice_Generator {
         // 5. Obtener cliente y NIT
         $nit = DFC_NIT_Handler::get_nit( $order );
         $cliente = [
-            'nombre'      => $order->get_billing_first_name() . ' ' . $order->get_billing_last_name(),
+            'nombre'      => $this->get_customer_account_name( $order ),
             'nit'         => $nit,
             'email'       => $order->get_billing_email(),
             'telefono'    => $order->get_billing_phone(),
@@ -992,14 +994,17 @@ class DFC_Invoice_Generator {
             ? trim( (string) $nit_lookup['nombre_ordenado'] )
             : '';
 
-        // Nunca usar "Consumidor Final" como nombre en la factura.
+        // Nunca usar "Consumidor Final" como nombre comercial cuando el NIT no es CF.
         if ( '' !== $nombre_ordenado && preg_match( '/consumidor\s+final/i', $nombre_ordenado ) ) {
             $nombre_ordenado = '';
         }
 
-        $cliente_nombre_factura = '' !== $nombre_ordenado
-            ? $nombre_ordenado
-            : $cliente['nombre'];
+        $cliente_nombre_comercial = 'CF' === strtoupper( trim( (string) $nit ) )
+            ? 'Consumidor Final'
+            : ( '' !== $nombre_ordenado ? $nombre_ordenado : $cliente['nombre'] );
+
+        // Persistir nombre comercial para impresión en PDF (independiente del nombre enviado al API).
+        $order->update_meta_data( self::META_FEL_CLIENTE_NOMBRE_COMERCIAL, $cliente_nombre_comercial );
 
         $cliente_direccion_factura = trim( $cliente['direccion'] . ' ' . $cliente['direccion2'] . ' ' . $cliente['ciudad'] );
 
@@ -1059,7 +1064,8 @@ class DFC_Invoice_Generator {
             'id'           => $macrobase_id,
             // Se mantiene por compatibilidad con implementaciones previas.
             'numeroOrden'  => $order_number_digits,
-            'clienteNombre' => $cliente_nombre_factura,
+            // Backoffice: enviar nombre de cuenta WooCommerce para control interno.
+            'clienteNombre' => $cliente['nombre'],
             'clienteTelefono' => $cliente['telefono'],
             'clienteEmail' => $cliente['email'],
             'clienteNIT'   => $nit,
@@ -1071,6 +1077,33 @@ class DFC_Invoice_Generator {
         ];
 
         return $payload;
+    }
+
+    /**
+     * Obtiene el nombre del cliente según su cuenta de WooCommerce.
+     */
+    private function get_customer_account_name( WC_Order $order ): string {
+        $billing_name = trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() );
+        if ( '' !== $billing_name ) {
+            return $billing_name;
+        }
+
+        $customer_id = absint( $order->get_customer_id() );
+        if ( $customer_id > 0 ) {
+            $user = get_userdata( $customer_id );
+            if ( $user ) {
+                $user_full_name = trim( (string) $user->first_name . ' ' . (string) $user->last_name );
+                if ( '' !== $user_full_name ) {
+                    return $user_full_name;
+                }
+
+                if ( ! empty( $user->display_name ) ) {
+                    return (string) $user->display_name;
+                }
+            }
+        }
+
+        return __( 'Cliente sin nombre', 'dale-facturas' );
     }
 
     /**

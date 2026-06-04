@@ -137,6 +137,7 @@ $billing_phone    = $order->get_billing_phone();
 $shipping_address = trim( $order->get_shipping_address_1() . ' ' . $order->get_shipping_address_2() . ' ' . $order->get_shipping_city() . ', ' . $order->get_shipping_state() );
 $billing_address  = $order->get_billing_address_1();
 $client_address   = ! empty( $shipping_address ) ? $shipping_address : $billing_address;
+$cliente_nombre_comercial_meta = trim( (string) $order->get_meta( '_dfc_fel_cliente_nombre_comercial' ) );
 
 $cliente_nombre_api = ! empty( $factura_respuesta['facturarA'] )
     ? trim( (string) $factura_respuesta['facturarA'] )
@@ -152,7 +153,9 @@ if ( $cliente_nombre_request && preg_match( '/consumidor\s+final/i', $cliente_no
     $cliente_nombre_request = '';
 }
 
-$cliente_nombre_factura = $cliente_nombre_api ? $cliente_nombre_api : ( $cliente_nombre_request ? $cliente_nombre_request : $billing_name );
+$cliente_nombre_factura = $cliente_nombre_comercial_meta
+    ? $cliente_nombre_comercial_meta
+    : ( $cliente_nombre_api ? $cliente_nombre_api : ( $cliente_nombre_request ? $cliente_nombre_request : $billing_name ) );
 $cliente_direccion_factura = $client_address;
 
 // Número de pedido
