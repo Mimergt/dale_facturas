@@ -170,8 +170,9 @@ if ( ! is_array( $totals ) ) {
     $totals = array();
 }
 
-$q_money = static function( $amount ) {
-    return 'Q.' . number_format( (float) $amount, 2, '.', ',' );
+$currency_symbol = html_entity_decode( get_woocommerce_currency_symbol( $order->get_currency() ), ENT_QUOTES, 'UTF-8' );
+$q_money = static function( $amount ) use ( $currency_symbol ) {
+    return $currency_symbol . number_format( (float) $amount, 2, '.', ',' );
 };
 
 $empresa_nombre_opt  = get_option( 'dalecafe_empresa_nombre', '' );
@@ -281,9 +282,6 @@ $establecimiento_info = array_filter( array(
             </span>
             <span class="second-text product-cost"><?php echo wp_kses_post( isset( $item['line_total'] ) ? $item['line_total'] : ( isset( $item['total'] ) ? $item['total'] : '' ) ); ?></span>
         </div>
-        <?php if ( isset( $item['meta'] ) && ! empty( trim( wp_strip_all_tags( $item['meta'] ) ) ) ) : ?>
-            <div class="detail-meta"><?php echo wp_kses_post( $item['meta'] ); ?></div>
-        <?php endif; ?>
     <?php endforeach; ?>
 
     <div class="section-divider section-divider-large"></div>

@@ -364,6 +364,11 @@ class DFC_Macrobase_API {
             return;
         }
 
+        // No escribir la contraseña del API en el log.
+        if ( is_array( $data ) && isset( $data['clave'] ) ) {
+            $data['clave'] = '********';
+        }
+
         $logger  = wc_get_logger();
         $context = [ 'source' => self::LOG_SOURCE ];
         $message = sprintf(

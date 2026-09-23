@@ -16,6 +16,7 @@ class DFC_Settings {
     const OPTION_INVOICE_SUBSCRIPTIONS = 'dfc_invoice_subscriptions'; // '1' | '0'
     const OPTION_DEBUG_MODE            = 'dfc_debug_mode';       // '1' | '0'
     const OPTION_PLU_MAP               = 'dfc_plu_map';          // JSON array
+    const OPTION_ID_PREFIX             = 'dfc_macrobase_id_prefix'; // dígitos antepuestos al id de Macrobase
 
     /**
      * Registrar hooks de admin.
@@ -64,6 +65,11 @@ class DFC_Settings {
         register_setting( 'dfc_settings', self::OPTION_AUTO_INVOICE,          [ 'sanitize_callback' => 'absint' ] );
         register_setting( 'dfc_settings', self::OPTION_INVOICE_SUBSCRIPTIONS, [ 'sanitize_callback' => 'absint' ] );
         register_setting( 'dfc_settings', self::OPTION_DEBUG_MODE,            [ 'sanitize_callback' => 'absint' ] );
+        register_setting( 'dfc_settings', self::OPTION_ID_PREFIX,             [
+            'sanitize_callback' => function ( $value ) {
+                return preg_replace( '/\D+/', '', (string) $value );
+            },
+        ] );
 
         // --- Sección: Conexión al API ---
         add_settings_section(
@@ -118,6 +124,19 @@ class DFC_Settings {
                     'production' => __( 'Producción', 'dale-facturas' ),
                     'test'       => __( 'Pruebas', 'dale-facturas' ),
                 ],
+            ]
+        );
+
+        add_settings_field(
+            self::OPTION_ID_PREFIX,
+            __( 'Prefijo de ID Macrobase', 'dale-facturas' ),
+            [ $this, 'render_field_text' ],
+            'dale-facturas',
+            'dfc_section_api',
+            [
+                'option'      => self::OPTION_ID_PREFIX,
+                'placeholder' => '1',
+                'description' => __( 'Dígitos que se anteponen al número de pedido para formar el id de Macrobase. Vacío = comportamiento original ("1" + número). Usar un prefijo distinto en cada sitio que comparta la misma cuenta de Macrobase para evitar el error ECN.', 'dale-facturas' ),
             ]
         );
 
@@ -283,6 +302,9 @@ class DFC_Settings {
             esc_attr( $size ),
             esc_attr( $args['placeholder'] ?? '' )
         );
+        if ( ! empty( $args['description'] ) ) {
+            echo '<p class="description">' . wp_kses_post( $args['description'] ) . '</p>';
+        }
     }
 
     public function render_field_password( array $args ): void {
@@ -496,6 +518,10 @@ class DFC_Settings {
 
     public function is_invoice_subscriptions(): bool {
         return '1' === get_option( self::OPTION_INVOICE_SUBSCRIPTIONS, '0' );
+    }
+
+    public function get_id_prefix(): string {
+        return (string) get_option( self::OPTION_ID_PREFIX, '' );
     }
 
     public function is_debug(): bool {

@@ -1040,7 +1040,11 @@ class DFC_Invoice_Generator {
 
         // Requisito operativo: el id de Macrobase debe iniciar con "1".
         // En preinvoice usamos un ID único por post_id para evitar choques históricos de ECN.
-        if ( 'preinvoice' === $context ) {
+        // Si hay prefijo configurado (sitios que comparten cuenta Macrobase), siempre se antepone.
+        $id_prefix = (string) get_option( DFC_Settings::OPTION_ID_PREFIX, '' );
+        if ( '' !== $id_prefix ) {
+            $macrobase_id = $id_prefix . ( 'preinvoice' === $context ? (string) $order->get_id() : $order_number_digits );
+        } elseif ( 'preinvoice' === $context ) {
             $macrobase_id = '1' . (string) $order->get_id();
         } else {
             $macrobase_id = 0 === strpos( $order_number_digits, '1' )
