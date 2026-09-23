@@ -39,7 +39,7 @@ class DFC_Product_Mapper {
      *
      * @return int|WP_Error PLU encontrado, o WP_Error si no existe mapeo.
      */
-    public function get_plu_for_product( WC_Product $product, array $item_data = [] ): int|WP_Error {
+    public function get_plu_for_product( WC_Product $product, array $item_data = [] ) {
         $sku = $this->resolve_product_sku( $product );
         $product_id = $product->get_id();
         $parent_id = method_exists( $product, 'get_parent_id' ) ? (int) $product->get_parent_id() : 0;
@@ -348,11 +348,11 @@ class DFC_Product_Mapper {
         $candidates = [ $value ];
 
         // Compatibilidad legacy: opciones con "<br/>Notas: ...".
-        if ( str_contains( $value, 'Notas:' ) ) {
+        if ( false !== strpos( $value, 'Notas:' ) ) {
             $parts = explode( 'Notas:', $value, 2 );
             $candidates[] = trim( $parts[0] );
         }
-        if ( str_contains( $value, '|' ) ) {
+        if ( false !== strpos( $value, '|' ) ) {
             $parts = explode( '|', $value, 2 );
             $candidates[] = trim( $parts[0] );
         }

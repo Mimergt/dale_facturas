@@ -788,7 +788,7 @@ class DFC_Invoice_Generator {
                 $item_data = DFC_Product_Mapper::extract_item_data( $item );
 
                 // Evitar que productos contenedor de suscripción sin SKU bloqueen la certificación.
-                if ( '' === $sku && str_contains( strtolower( $product_type ), 'subscription' ) ) {
+                if ( '' === $sku && false !== strpos( strtolower( $product_type ), 'subscription' ) ) {
                     $legacy_meta_items = $item->get_meta( '_tmcartepo_data', true );
                     $legacy_added_total = 0.0;
                     $first_legacy_plu = null;
@@ -1043,7 +1043,7 @@ class DFC_Invoice_Generator {
         if ( 'preinvoice' === $context ) {
             $macrobase_id = '1' . (string) $order->get_id();
         } else {
-            $macrobase_id = str_starts_with( $order_number_digits, '1' )
+            $macrobase_id = 0 === strpos( $order_number_digits, '1' )
                 ? $order_number_digits
                 : '1' . $order_number_digits;
         }
